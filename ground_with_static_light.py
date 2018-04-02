@@ -285,27 +285,33 @@ void main() {
 TEXTURE_FRAG = """#version 330 core
 in vec3 nout;
 in vec3 l;
+in vec3 ks_out;
+
 float shine;
 out vec4 outColor;
 
 uniform sampler2D diffuseMap;
 in vec2 fragTexCoord;
-out vec4 outColor;
+//out vec4 outColor;
 void main() {
+    float scalar_prod = dot(nout,l);
     if (scalar_prod < 0) {
         scalar_prod = 0;
     }
     shine = 0.6 * 128.0;
     vec3 ref = reflect(normalize(l), normalize(nout));
-    float dot_ref = dot(ref, vec3(0,0,3));
+    float dot_ref = dot(ref, vec3(0,0,1));
     if (dot_ref< 0) {
         dot_ref = 0;
     }
-    outColor = vec4(vec3(
-			texture(diffuseMap, fragTexCoord)[0] * scalar_prod + ks_out*pow( dot_ref , shine),
-			texture(diffuseMap, fragTexCoord)[1] * scalar_prod + ks_out*pow( dot_ref , shine),
-			texture(diffuseMap, fragTexCoord)[2] * scalar_prod + ks_out*pow( dot_ref , shine)
-			), 1);
+    float r = scalar_prod*texture(diffuseMap, fragTexCoord)[0] + pow(dot_ref, shine)*ks_out[0];
+    float g = scalar_prod*texture(diffuseMap, fragTexCoord)[1] + pow(dot_ref, shine)*ks_out[1];
+    float b = scalar_prod*texture(diffuseMap, fragTexCoord)[2] + pow(dot_ref, shine)*ks_out[2];
+    outColor = vec4(r, g, b, 1);
+    //outColor = vec4(scalar_prod * r + ks_out*pow( dot_ref , shine),
+    //		scalar_prod * g  + ks_out*pow( dot_ref , shine),
+    //			scalar_prod * b  + ks_out*pow( dot_ref , shine), 1);
+    //outColor = vec4(scalar_prod*texture(diffuseMap, fragTexCoord) + pow(dot_ref, shine)*ks_out, 1)
 }"""
 
 
@@ -356,7 +362,7 @@ class TexturedPlane:
 
 	# lighting coeffs	
         ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
-        GL.glUniform3fv(ks_location, 1, (1,1,1))
+        GL.glUniform3fv(ks_location, 1, (0.1,0.1,0.1))
 
         # texture access setups
         loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
