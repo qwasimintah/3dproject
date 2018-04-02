@@ -301,7 +301,11 @@ void main() {
     if (dot_ref< 0) {
         dot_ref = 0;
     }
-    outColor = vec4(texture(diffuseMap, fragTexCoord) * scalar_prod + ks_out*pow( dot_ref , shine), 1);
+    outColor = vec4(vec3(
+			texture(diffuseMap, fragTexCoord)[0] * scalar_prod + ks_out*pow( dot_ref , shine),
+			texture(diffuseMap, fragTexCoord)[1] * scalar_prod + ks_out*pow( dot_ref , shine),
+			texture(diffuseMap, fragTexCoord)[2] * scalar_prod + ks_out*pow( dot_ref , shine)
+			), 1);
 }"""
 
 
