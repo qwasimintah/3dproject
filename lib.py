@@ -131,10 +131,11 @@ class VertexArray:
             data = np.array(data, np.float32, copy=False)
             print(data)
             nb_primitives, size = data.shape
+            print(nb_primitives,size)
             GL.glEnableVertexAttribArray(loc)  # activates for current vao only
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.buffers[-1])
             GL.glBufferData(GL.GL_ARRAY_BUFFER, data, usage)
-            #GL.glVertexAttribPointer(loc, size, GL.GL_FLOAT, False, 0, None)
+            GL.glVertexAttribPointer(loc, size, GL.GL_FLOAT, False, 0, None)
 
         # optionally create and upload an index buffer for this object
         self.draw_command = GL.glDrawArrays
@@ -168,6 +169,7 @@ class VertexArray:
 
         # draw triangle as GL_TRIANGLE vertex array, draw array call
         #self.vertex_array.draw(GL.GL_TRIANGLES)
+        #print(*self.arguments)
         self.draw_command(GL.GL_TRIANGLES, *self.arguments)
         #GL.glDrawArrays(GL.GL_TRIANGLES, self.arguments[0], GL.GL_UNSIGNED_INT, None)
         GL.glBindVertexArray(0)
@@ -250,15 +252,16 @@ class CubeTexture:
     def __init__(self, files=[], wrap_mode=GL.GL_REPEAT, min_filter=GL.GL_LINEAR,
                  mag_filter=GL.GL_LINEAR_MIPMAP_LINEAR):
         self.glid = GL.glGenTextures(1)
-        #GL.glActiveTexture(GL.GL_TEXTURE0)
-        #GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.glid)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.glid)
         # helper array stores texture format for every pixel size 1..4
         format = [GL.GL_LUMINANCE, GL.GL_LUMINANCE_ALPHA, GL.GL_RGB, GL.GL_RGBA]
+        sky_faces = ['morning_lf.png', 'morning_rt.png', 'morning_up.png', 'morning_dn.png', 'morning_ft.png', 'morning_bk.png']
         try:
-            for i,file in enumerate(files):
+            for i,file in enumerate(sky_faces):
             # imports image as a numpy array in exactly right format
                 tex = np.array(Image.open("hw_morning/"+file))
-                print(i)
+                #print(i)
                 format1 = format[0 if len(tex.shape) == 2 else (tex.shape[2] - 1)]
                 GL.glTexImage2D(GL.GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL.GL_RGBA, tex.shape[1],
                                 tex.shape[0], 0, format1, GL.GL_UNSIGNED_BYTE, tex)
@@ -268,18 +271,19 @@ class CubeTexture:
                 # GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, min_filter)
                 # GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, mag_filter)
                 # GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
-                #message = 'Loaded texture %s\t(%s, %s, %s, %s)'
-                #print(message % (file, tex.shape, wrap_mode, min_filter, mag_filter))
+                message = 'Loaded texture %s\t(%s, %s, %s, %s)'
+                print(message % (file, tex.shape, wrap_mode, min_filter, mag_filter))
 
             GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
             GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
             GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
             GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
             GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_R, GL.GL_CLAMP_TO_EDGE)
+            GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, 0)
             
         except FileNotFoundError:
             print("ERROR: unable to load texture file %s" % file)
-        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, 0)
+        #GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, 0)
 
     def __del__(self):  # delete GL texture from GPU when object dies
         GL.glDeleteTextures(self.glid)
@@ -290,18 +294,22 @@ class CubeTexture:
 TEXTURE_VERT = """#version 330 core
 uniform mat4 modelviewprojection;
 layout(location = 0) in vec3 position;
-out vec3 fragTexCoord;
+//out vec3 fragTexCoord;
+varying mediump vec3 fragTexCoord;
 void main() {
     gl_Position = modelviewprojection * vec4(position, 1);
-    fragTexCoord = position.xyz;
+    //gl_Position = gl_Position.xyww;
+    //fragTexCoord = normalize(position.xyz);
+    fragTexCoord = position;
 }"""
 
 TEXTURE_FRAG = """#version 330 core
 uniform samplerCube diffuseMap;
-in vec3 fragTexCoord;
+varying mediump vec3 fragTexCoord;
+//in vec3 fragTexCoord;
 out vec4 outColor;
 void main() {
-    FragColor = texture(diffuseMap, fragTexCoord);
+    outColor = texture(diffuseMap, fragTexCoord);
 }"""
 
 
@@ -315,19 +323,22 @@ class TexturedPlane:
         # triangle and face buffers
         vertices = 100 * np.array(((-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)), np.float32)
 
-        print(vertices)
+        #print(vertices)
         #faces = np.array(((0, 1, 2), (0, 2, 3)), np.uint32)
         #self.vertex_array = VertexArray([vertices], faces)
-        skybox_right = [1, -1, -1, 1, -1,  1, 1,  1,  1, 1,  1,  1, 1,  1, -1, 1, -1, -1]
-        skybox_left = [-1, -1,  1, -1, -1, -1, -1,  1, -1, -1,  1, -1, -1,  1,  1, -1, -1,  1]
-        skybox_top = [-1,  1, -1, 1,  1, -1, 1,  1,  1, 1,  1,  1, -1,  1,  1, -1,  1, -1]
-        skybox_bottom = [-1, -1, -1, -1, -1,  1, 1, -1, -1, 1, -1, -1, -1, -1,  1, 1, -1,  1]
-        skybox_back = [-1,  1, -1, -1, -1, -1, 1, -1, -1, 1, -1, -1, 1,  1, -1, -1,  1, -1]
-        skybox_front = [-1, -1,  1, -1,  1,  1, 1,  1,  1, 1,  1,  1, 1, -1,  1, -1, -1,  1]
-
-        skybox_vertices = np.array([skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front], dtype=np.float32)
-        print(skybox_vertices)
-        self.vertex_array = VertexArray([skybox_vertices])
+        skybox_right = iter([1, -1, -1, 1, -1,  1, 1,  1,  1, 1,  1,  1, 1,  1, -1, 1, -1, -1])
+        skybox_left =iter([-1, -1,  1, -1, -1, -1, -1,  1, -1, -1,  1, -1, -1,  1,  1, -1, -1,  1])
+        skybox_top = iter([-1,  1, -1, 1,  1, -1, 1,  1,  1, 1,  1,  1, -1,  1,  1, -1,  1, -1])
+        skybox_bottom = iter( [-1, -1, -1, -1, -1,  1, 1, -1, -1, 1, -1, -1, -1, -1,  1, 1, -1,  1])
+        skybox_back = iter([-1,  1, -1, -1, -1, -1, 1, -1, -1, 1, -1, -1, 1,  1, -1, -1,  1, -1])
+        skybox_front = iter([-1, -1,  1, -1,  1,  1, 1,  1,  1, 1,  1,  1, 1, -1,  1, -1, -1,  1])
+        skybox = iter(SKY_BOX_VERTICES)
+        sk_right_triangle = [(x,next(skybox), next(skybox)) for x in skybox]
+        #sk_right_triangle = [(x, next(y), next(y)) for y in [skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front] for x in y ]
+        print(sk_right_triangle)
+        #skybox_vertices = np.array([skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front], dtype=np.float32)
+        #print(skybox_vertices)
+        self.vertex_array = VertexArray([sk_right_triangle])
 
         # interactive toggles
         self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
@@ -443,11 +454,15 @@ class Viewer:
         GL.glClearColor(0.1, 0.1, 0.1, 0.1)
         #GL.glEnable(GL.GL_CULL_FACE)
         GL.glEnable(GL.GL_DEPTH_TEST)
-        GL.glFrontFace ( GL.GL_CW )
+        #GL.glFrontFace ( GL.GL_CW )
         #GL.glEnable(GL.GL_TEXTURE_CUBE_MAP)
+        #GL.glEnable(GL.GL_TEXTURE_2D)    
         #GL.glEnable(GL.GL_RGB);
-        #GL.glCullFace( GL.GL_BACK)
-        #GL.glDepthFunc(GL.GL_LEQUAL);
+        GL.glCullFace( GL.GL_BACK)
+        GL.glDepthFunc(GL.GL_LEQUAL);
+        #GL.glDepthFunc(GL.GL_LESS);
+        GL.glDepthMask(GL.GL_TRUE);
+        #glDepthFunc(GL_LEQUAL);
         # compile and initialize shader programs once globally
 
         # initially empty list of object to draw
@@ -499,6 +514,43 @@ class Trex(Node):
         Node.__init__(self)
         self.add(*load('trex.obj'))  # just load the cylinder from file
 
+
+SKY_BOX_VERTICES = [-1.0,  1.0, -1.0,
+    -1.0, -1.0, -1.0,
+     1.0, -1.0, -1.0,
+     1.0, -1.0, -1.0,
+     1.0,  1.0, -1.0,
+    -1.0,  1.0, -1.0,
+    -1.0, -1.0,  1.0,
+    -1.0, -1.0, -1.0,
+    -1.0,  1.0, -1.0,
+    -1.0,  1.0, -1.0,
+    -1.0,  1.0,  1.0,
+    -1.0, -1.0,  1.0,
+     1.0, -1.0, -1.0,
+     1.0, -1.0,  1.0,
+     1.0,  1.0,  1.0,
+     1.0,  1.0,  1.0,
+     1.0,  1.0, -1.0,
+     1.0, -1.0, -1.0,
+    -1.0, -1.0,  1.0,
+    -1.0,  1.0,  1.0,
+     1.0,  1.0,  1.0,
+     1.0,  1.0,  1.0,
+     1.0, -1.0,  1.0,
+    -1.0, -1.0,  1.0,
+    -1.0,  1.0, -1.0,
+     1.0,  1.0, -1.0,
+     1.0,  1.0,  1.0,
+     1.0,  1.0,  1.0,
+    -1.0,  1.0,  1.0,
+    -1.0,  1.0, -1.0,
+    -1.0, -1.0, -1.0,
+    -1.0, -1.0,  1.0,
+     1.0, -1.0, -1.0,
+     1.0, -1.0, -1.0,
+    -1.0, -1.0,  1.0,
+     1.0, -1.0,  1.0]
 
 # -------------- main program and scene setup --------------------------------
 def main():
