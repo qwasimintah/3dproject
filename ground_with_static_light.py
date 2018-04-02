@@ -266,18 +266,42 @@ class Texture:
 TEXTURE_VERT = """#version 330 core
 uniform mat4 modelviewprojection;
 layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 normal;
+
+out vec3 nout;
+out vec3 l;
+uniform vec3 ks;
+out vec3 ks_out;
+
 out vec2 fragTexCoord;
 void main() {
     gl_Position = modelviewprojection * vec4(position, 1);
+    l = normalize(vec3(1,1,1));
+    nout = normal;
+    ks_out = ks;
     fragTexCoord = position.xy;
 }"""
 
 TEXTURE_FRAG = """#version 330 core
+in vec3 nout;
+in vec3 l;
+float shine;
+out vec4 outColor;
+
 uniform sampler2D diffuseMap;
 in vec2 fragTexCoord;
 out vec4 outColor;
 void main() {
-    outColor = texture(diffuseMap, fragTexCoord);
+    if (scalar_prod < 0) {
+        scalar_prod = 0;
+    }
+    shine = 0.6 * 128.0;
+    vec3 ref = reflect(normalize(l), normalize(nout));
+    float dot_ref = dot(ref, vec3(0,0,3));
+    if (dot_ref< 0) {
+        dot_ref = 0;
+    }
+    outColor = vec4(texture(diffuseMap, fragTexCoord) * scalar_prod + ks_out*pow( dot_ref , shine), 1);
 }"""
 
 
@@ -295,7 +319,7 @@ class TexturedPlane:
         [vertices, normals], faces = generate_perlin_grid(200)
         #randomize_height(vertices)
         #self.vertex_array = VertexArray([vertices], faces)
-        self.vertex_array = VertexArray([vertices], faces)
+        self.vertex_array = VertexArray([vertices, normals], faces)
 
         # interactive toggles
         self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
@@ -325,6 +349,10 @@ class TexturedPlane:
         # projection geometry
         loc = GL.glGetUniformLocation(self.shader.glid, 'modelviewprojection')
         GL.glUniformMatrix4fv(loc, 1, True, projection @ view @ model)
+
+	# lighting coeffs	
+        ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
+        GL.glUniform3fv(ks_location, 1, (1,1,1))
 
         # texture access setups
         loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
@@ -460,7 +488,7 @@ class Viewer:
                 glfw.set_window_should_close(self.win, True)
 
 class Trex(Node):
-    """ Very simple tyronasaurus based on practical 2 load function """
+    """ Very simple tyranosaurus based on practical 2 load function """
     def __init__(self):
         Node.__init__(self)
         self.add(*load('trex.obj'))  # just load the cylinder from file
