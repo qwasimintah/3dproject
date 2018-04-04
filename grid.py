@@ -58,8 +58,8 @@ def randomize_gradient(width, height, step):
             #gradient[p*width + q][0]=random.gauss(0, 0.05)
             #gradient[p*width + q][1]=random.gauss(0, 0.05)
             #defined_grad.append(p*width + q)
-            gradient[p*width + q][0]=random.uniform(-1,1)
-            gradient[p*width + q][1]=random.uniform(-1,1)
+            gradient[p*(width + 1) + q][0]=random.uniform(-1,1)
+            gradient[p*(width + 1) + q][1]=random.uniform(-1,1)
     #return 0.08*gradient
     return gradient
 
@@ -71,7 +71,7 @@ def dotGridGradient(gradient, width, ix, iy, x, y):
     #if iy + width*ix not in used_grad:
     #    used_grad.append(iy + width*ix)
 
-    return (dx*gradient[iy + width*ix][0] + dy*gradient[iy + width*ix][1]);
+    return (dx*gradient[iy + (width+1)*ix][0] + dy*gradient[iy + (width+1)*ix][1]);
 
 
 #def perlin(x, y, vertices):
@@ -93,6 +93,10 @@ def dotGridGradient(gradient, width, ix, iy, x, y):
 #
 #    return value
 
+def lerp_smooth(a, b, fraction):
+    f = lambda t: t * t * t * (t * (t * 6 - 15) + 10)
+    return f(1-fraction)*a + f(fraction)*b
+
 def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
     if width==None:
         width = height
@@ -101,23 +105,22 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
     for p in range(0, height - step):
         for q in range(0, width - step):
             #if p%step != 0 and q%step != 0:
-            if True:
-                p0, q0 = step*(p // step), step*(q // step)
-                #p1, q1 = p0 + 1, q0 + 1
-                p1, q1 = p0 + step, q0 + step
-                sp, sq = p % step, q % step
-                n0 = dotGridGradient(gradient, width, p0, q0, p, q)
-                n1 = dotGridGradient(gradient, width, p1, q0, p, q)
-                ix0 = lerp(n0, n1, sp/step)
-                #ix0 = lerp(n0, n1, sp)
-                n0 = dotGridGradient(gradient, width, p0, q1, p, q)
-                n1 = dotGridGradient(gradient, width, p1, q1, p, q)
-                ix1 = lerp(n0, n1, sp/step)
-                #ix1 = lerp(n0, n1, sp)
-                value = lerp(ix0, ix1, sq/step)
-                #value = lerp(ix0, ix1, sq)
+            p0, q0 = step*(p // step), step*(q // step)
+            #p1, q1 = p0 + 1, q0 + 1
+            p1, q1 = p0 + step, q0 + step
+            sp, sq = p % step, q % step
+            n0 = dotGridGradient(gradient, width, p0, q0, p, q)
+            n1 = dotGridGradient(gradient, width, p1, q0, p, q)
+            ix0 = lerp_smooth(n0, n1, sp/step)
+            #ix0 = lerp_smooth(n0, n1, sp)
+            n0 = dotGridGradient(gradient, width, p0, q1, p, q)
+            n1 = dotGridGradient(gradient, width, p1, q1, p, q)
+            ix1 = lerp_smooth(n0, n1, sp/step)
+            #ix1 = lerp_smooth(n0, n1, sp)
+            value = lerp_smooth(ix0, ix1, sq/step)
+            #value = lerp_smooth(ix0, ix1, sq)
 
-                vertices[p*width + q][2] = value
+            vertices[p*(width+1) + q][2] = value
     print([z[2] for z in vertices])
 
     #print(len(used_grad))

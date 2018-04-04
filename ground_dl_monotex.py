@@ -265,6 +265,11 @@ class Texture:
 #}"""
 
 TEXTURE_VERT = """#version 330 core
+
+//tex
+//uniform vec2 tex_uv;
+layout(location = 2) in vec2 tex;
+
 uniform mat4 modelviewprojection;
 uniform vec3 light;
 layout(location = 0) in vec3 position;
@@ -282,7 +287,8 @@ void main() {
     l = normalize(light);
     nout = normal;
     ks_out = ks;
-    fragTexCoord = position.xy;
+    //fragTexCoord = position.xy;
+    fragTexCoord = tex;
 }"""
 
 TEXTURE_FRAG = """#version 330 core
@@ -322,17 +328,24 @@ void main() {
 class TexturedPlane:
     """ Simple first textured object """
 
-    def __init__(self, file):
+    def __init__(self, file, size=200, step=25):
         # feel free to move this up in the viewer as per other practicals
         self.shader = Shader(TEXTURE_VERT, TEXTURE_FRAG)
 
         # triangle and face buffers
         #vertices = 100 * np.array(((-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)), np.float32)
         #faces = np.array(((0, 1, 2), (0, 2, 3)), np.uint32)
-        [vertices, normals], faces = generate_perlin_grid(202, step=25)
+        [vertices, normals], faces = generate_perlin_grid(size, step)
+        tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
+        for i in range(len(tex_uv)):
+            # remember scale for later
+            tex_uv[i][0] = (i // (size + 3))/(size + 1) # why +3????
+            tex_uv[i][1] = (i % (size + 3))/(size + 1)
+            #tex_uv[i][0] = (i // (size + 3)) # why +3????
+            #tex_uv[i][1] = (i % (size + 3))
         #randomize_height(vertices)
         #self.vertex_array = VertexArray([vertices], faces)
-        self.vertex_array = VertexArray([vertices, normals], faces)
+        self.vertex_array = VertexArray([vertices, normals, tex_uv], faces)
 
         # interactive toggles
         self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
@@ -526,6 +539,7 @@ def main():
 
     #viewer.add(cylinder_node)
     viewer.add(TexturedPlane('grass_green.png'))
+    #viewer.add(TexturedPlane('grass.png'))
 
 
 

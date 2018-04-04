@@ -1,6 +1,7 @@
 import numpy as np
 import math
 from math import floor
+from math import abs
 from transform import lerp, normalized
 import numpy as np
 import random
@@ -98,18 +99,43 @@ def get_normal(a, b):
     cr = np.cross(a, b)
     return normalized(cr)
 
-def avg_neighbours_grid(array, x, y, height, width):
+def avg_neighbours_grid(array, x, y, height, width, normals_proj):
     neighbours = []
+    #normals_proj = np.zeros(shape(height * width))
+    o = array[x*(width + 1) + y]
+    if x > 0:
+        b = array[(x-1)*(width + 1) + y]
+    if x < height:
+        u = array[(x+1)*(width + 1) + y]
+    if y > 0:
+        l = array[x*(width + 1) + y-1]
+    if y < width:
+        r = array[x*(width + 1) + y+1]
+
     if x > 0:
         if y > 0:
-             neighbours.append(get_normal(array[x*(width + 1) + y-1] - array[x*(width + 1) + y], array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y]))  
+             neighbours.append(get_normal(l - o, b - o))
         if y < width:
-            neighbours.append(get_normal(array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y+1] - array[x*(width + 1) + y]))  
+            neighbours.append(get_normal(b - o, r - o))
     if x < height:
         if y < width:
-            neighbours.append(get_normal(array[x*(width + 1) + y+1] - array[x*(width + 1) + y], array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y]))  
+            nrm = get_normal(r - o, u - o)
+            neighbours.append(nrm)
+            normals_proj[x*width + y] = math.abs(nrm[2])
         if y > 0:
-            neighbours.append(get_normal(array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y-1] - array[x*(width + 1) + y]))  
+            nrm = get_normal(u - o, l - o)
+            neighbours.append(nrm)
+            normals_proj[x*width + y] = math.abs(nrm[2])
+#    if x > 0:
+#        if y > 0:
+#             neighbours.append(get_normal(array[x*(width + 1) + y-1] - array[x*(width + 1) + y], array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y]))  
+#        if y < width:
+#            neighbours.append(get_normal(array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y+1] - array[x*(width + 1) + y]))  
+#    if x < height:
+#        if y < width:
+#            neighbours.append(get_normal(array[x*(width + 1) + y+1] - array[x*(width + 1) + y], array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y]))  
+#        if y > 0:
+#            neighbours.append(get_normal(array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y-1] - array[x*(width + 1) + y]))  
     res = 0*neighbours[0]
     N = len(neighbours)
     for n in range(len(neighbours)):
