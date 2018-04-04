@@ -139,7 +139,7 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
         width = height
     try:
         with open("ground", "rb") as fp:
-            [vertices, normals, faces] = pickle.load(fp)
+            [vertices, normals, faces, normals_proj] = pickle.load(fp)
     except:
         vertices, faces = generate_grid(height, width, scale, centered)
         gradient = randomize_gradient(width + step, height + step, step)
@@ -228,7 +228,7 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
         #    if i not in used_grad:
         #        print(i)
         with open('ground', 'wb') as fp:
-            pickle.dump([vertices, normals, faces], fp)
+            pickle.dump([vertices, normals, faces, normals_proj], fp)
     
         print("Generation of the ground complete")
     return [vertices, normals], faces

@@ -1,11 +1,11 @@
 import numpy as np
 import math
 from math import floor
-from math import abs
 from transform import lerp, normalized
 import numpy as np
 import random
 import pickle
+from gen_texture import generate_texture
 
 def make_vertex(vertices, n, x, y, height, width, centered=False):
     if centered:
@@ -121,11 +121,11 @@ def avg_neighbours_grid(array, x, y, height, width, normals_proj):
         if y < width:
             nrm = get_normal(r - o, u - o)
             neighbours.append(nrm)
-            normals_proj[x*width + y] = math.abs(nrm[2])
+            normals_proj[x*width + y] = abs(nrm[2])
         if y > 0:
             nrm = get_normal(u - o, l - o)
             neighbours.append(nrm)
-            normals_proj[x*width + y] = math.abs(nrm[2])
+            #normals_proj[x*width + y] = abs(nrm[2])
 #    if x > 0:
 #        if y > 0:
 #             neighbours.append(get_normal(array[x*(width + 1) + y-1] - array[x*(width + 1) + y], array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y]))  
@@ -151,21 +151,23 @@ def avg_neighbours_grid(array, x, y, height, width, normals_proj):
 
 def get_normals(vertices, height, width):
     normals = np.zeros(shape=((width + 1)*(height + 1), 3), dtype=float)
+    normals_proj = np.zeros(shape=(height * width))
     for p in range(height + 1):
         for q in range(width + 1):
-            normals[p*(width + 1) + q] = avg_neighbours_grid(vertices, p, q, height, width)
-    return normals
+            normals[p*(width + 1) + q] = avg_neighbours_grid(vertices, p, q, height, width, normals_proj)
+    return normals, normals_proj
 
 def lerp_smooth(a, b, fraction):
     f = lambda t: t * t * t * (t * (t * 6 - 15) + 10)
     return f(1-fraction)*a + f(fraction)*b
+
 
 def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
     if width==None:
         width = height
     try:
         with open("ground", "rb") as fp:
-            [vertices, normals, faces] = pickle.load(fp)
+            [vertices, normals, faces, normals_proj] = pickle.load(fp)
     except:
         vertices, faces = generate_grid(height, width, scale, centered)
         gradient = randomize_gradient(width + step, height + step, step)
@@ -244,7 +246,7 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
         print("Generation with Perlin noise complete")
         #randomize_height(vertices, width, height, sigma=0.15)
         #print("Additional gaussian noise complete")
-        normals = get_normals(vertices, height, width)
+        normals, normals_proj = get_normals(vertices, height, width)
         print("Calculation of normals complete")
 
         #print(len(used_grad))
@@ -254,7 +256,8 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
         #    if i not in used_grad:
         #        print(i)
         with open('ground', 'wb') as fp:
-            pickle.dump([vertices, normals, faces], fp)
+            pickle.dump([vertices, normals, faces, normals_proj], fp)
+        generate_texture(normals_proj, height, width)
     
         print("Generation of the ground complete")
     return [vertices, normals], faces

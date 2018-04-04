@@ -16,7 +16,8 @@ import pyassimp.errors              # assimp error management + exceptions
 from transform import translate, rotate, scale, vec, identity
 #from h_loader import *
 from transform import Trackball, identity
-from grid_normals import generate_grid, generate_perlin_grid 
+#from grid_normals import generate_grid, generate_perlin_grid 
+from grid_texture import generate_perlin_grid
 from PIL import Image               # load images for textures
 
 import math
@@ -307,7 +308,7 @@ void main() {
     if (scalar_prod < 0) {
         scalar_prod = 0;
     }
-    shine = 0.6 * 128.0;
+    shine = 1.0 * 128.0;
     vec3 ref = reflect(normalize(l), normalize(nout));
     float dot_ref = dot(ref, vec3(0,0,1));
     if (dot_ref< 0) {
@@ -335,12 +336,12 @@ class TexturedPlane:
         # triangle and face buffers
         #vertices = 100 * np.array(((-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)), np.float32)
         #faces = np.array(((0, 1, 2), (0, 2, 3)), np.uint32)
-        [vertices, normals], faces = generate_perlin_grid(size, step)
+        [vertices, normals], faces = generate_perlin_grid(size, step=step)
         tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
         for i in range(len(tex_uv)):
             # remember scale for later
-            tex_uv[i][0] = (i // (size + 3))/(size + 1) # why +3????
-            tex_uv[i][1] = (i % (size + 3))/(size + 1)
+            tex_uv[i][0] = (i // (size + 1))/(size + 1) # why +3????
+            tex_uv[i][1] = (i % (size + 1))/(size + 1)
             #tex_uv[i][0] = (i // (size + 3)) # why +3????
             #tex_uv[i][1] = (i % (size + 3))
         #randomize_height(vertices)
@@ -378,11 +379,12 @@ class TexturedPlane:
 
 	# lighting coeffs	
         ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
-        GL.glUniform3fv(ks_location, 1, (0.1,0.1,0.1))
+        GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
 
         t = glfw.get_time()
         l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
-        GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
+        #GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
+        GL.glUniform3fv(l_location, 1, (0.5, 0, -0.75))
 
         # texture access setups
         loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
@@ -518,7 +520,7 @@ class Viewer:
                 glfw.set_window_should_close(self.win, True)
 
 class Trex(Node):
-    """ Very simple tyranosaurus based on practical 2 load function """
+    """ Very simple tyranosaurus based on the natural selection and lots of slow prey"""
     def __init__(self):
         Node.__init__(self)
         self.add(*load('trex.obj'))  # just load the cylinder from file
@@ -538,7 +540,8 @@ def main():
     #cylinder_node.add(Trex())
 
     #viewer.add(cylinder_node)
-    viewer.add(TexturedPlane('grass_green.png'))
+    #viewer.add(TexturedPlane('grass_green.png'))
+    viewer.add(TexturedPlane('ground_tex.png'))
     #viewer.add(TexturedPlane('grass.png'))
 
 
