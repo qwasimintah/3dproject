@@ -655,7 +655,7 @@ class TexturedMesh:
         vertices = attributes[0]
         self.tex_uv = attributes[1]
         self.normals = (attributes[2]) # why put them in self?
-        print("THIS IS NORMALS", self.normals)
+        #print("THIS IS NORMALS", self.normals)
         self.vertex_array = VertexArray([vertices, self.normals, self.tex_uv], index)
 
         # interactive toggles
@@ -827,11 +827,11 @@ def load_textured(file):
     meshes = []
     for mesh in scene.meshes:
         texture = scene.materials[mesh.materialindex].texture
-        print(texture)
+        #print(texture)
         # tex coords in raster order: compute 1 - y to follow OpenGL convention
         tex_uv = ((0, 1) + mesh.texturecoords[0][:, :2] * (1, -1)
                   if mesh.texturecoords.size else None)
-        print(tex_uv)
+        #print(tex_uv)
         # create the textured mesh object from texture, attributes, and indices
         meshes.append(TexturedMesh(texture, [mesh.vertices, tex_uv, mesh.normals], mesh.faces))
 
@@ -871,11 +871,11 @@ def load_textured_n_instances(file, nb_instances):
         meshes = []
         for mesh in scene.meshes:
             texture = scene.materials[mesh.materialindex].texture
-            print(texture)
+            #print(texture)
             # tex coords in raster order: compute 1 - y to follow OpenGL convention
             tex_uv = ((0, 1) + mesh.texturecoords[0][:, :2] * (1, -1)
                       if mesh.texturecoords.size else None)
-            print(tex_uv)
+            #print(tex_uv)
             # create the textured mesh object from texture, attributes, and indices
             meshes.append(TexturedMesh(texture, [mesh.vertices, tex_uv, mesh.normals], mesh.faces))
 
@@ -1050,21 +1050,45 @@ def main():
     #viewer.add(TexturedPlane('grass_green.png'))
     size, step = 200, 25
     [vertices, normals], faces = generate_perlin_grid(size, step=step)
+    for i,x in enumerate(normals):
+        normals[i] = -1*x
+
     tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
     for i in range(len(tex_uv)):
         tex_uv[i][0] = (i // (size + 1))/(size + 1)
         tex_uv[i][1] = (i % (size + 1))/(size + 1)
-    #viewer.add(TexturedMesh('ground_tex.png', [vertices, tex_uv, normals], faces))
 
+    # THIS IS STUPID REMOVE IT LATER
+    for x in vertices:
+        x[1], x[2] = x[2], x[1]
+    for x in normals:
+        x[1], x[2] = x[2], x[1]
+
+
+    tree_bases = []
+    for i, x in enumerate(normals):
+        #print(x[1])
+        if abs(x[1]) > 0.96:
+            p = i // (size + 1)
+            q = i % (size + 1)
+            tree_bases.append((p, vertices[i][1], q))
+    number_trees = len(tree_bases)
+    print("nb_trees: ", number_trees)
+    if number_trees > 20:
+        #tree_bases = tree_bases[:20]
+        tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//150)]
     #viewer.add(TexturedPlane('grass.png'))
 
-    trees = load_textured_n_instances("Tree/Tree.obj", 25)
+    #trees = load_textured_n_instances("Tree/Tree.obj", 25)
+    trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
     #tree1, tree2 = load_textured2("Tree/Tree.obj")
     #tree2 = load_textured("Tree/Tree.obj")
+    viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
     for i, tree in  enumerate(trees):
         for m in tree:
             #m.transform = identity()
-            m.transform = translate(3*(i//5), 0, 3*(i%5))
+            #m.transform = translate(3*(i//5), 0, 3*(i%5))
+            m.transform = translate(*(tree_bases[i]))
         viewer.add(*tree)
             #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
