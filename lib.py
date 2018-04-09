@@ -255,11 +255,14 @@ class CubeTexture:
         GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.glid)
         # helper array stores texture format for every pixel size 1..4
         format = [GL.GL_LUMINANCE, GL.GL_LUMINANCE_ALPHA, GL.GL_RGB, GL.GL_RGBA]
-        sky_faces = ['morning_lf.png', 'morning_rt.png', 'morning_up.png', 'morning_dn.png', 'morning_ft.png', 'morning_bk.png']
+        sky_faces = ['morning_rt.png', 'morning_lf.png', 'morning_up.png', 'morning_dn.png', 'morning_bk.png', 'morning_ft.png']
+        sky_faces = ['morning_ft.png', 'morning_bk.png', 'morning_up.png', 'morning_dn.png', 'morning_rt.png', 'morning_lf.png']
+        sky_faces = ['ft.png', 'bk.png', 'up.png', 'dn.png', 'rt.png', 'lf.png']
         try:
             for i,file in enumerate(sky_faces):
             # imports image as a numpy array in exactly right format
-                tex = np.array(Image.open("hw_morning/"+file))
+                #tex = np.array(Image.open("hw_morning/"+file))
+                tex = np.array(Image.open("sky/"+file))
                 #print(i)
                 format1 = format[0 if len(tex.shape) == 2 else (tex.shape[2] - 1)]
                 GL.glTexImage2D(GL.GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL.GL_RGBA, tex.shape[1],
@@ -294,17 +297,17 @@ TEXTURE_VERT = """#version 330 core
 uniform mat4 modelviewprojection;
 layout(location = 0) in vec3 position;
 //out vec3 fragTexCoord;
-varying mediump vec3 fragTexCoord;
+out mediump vec3 fragTexCoord;
 void main() {
     gl_Position = modelviewprojection * vec4(position, 1);
     //gl_Position = gl_Position.xyww;
-    //fragTexCoord = normalize(position.xyz);
-    fragTexCoord = position;
+    fragTexCoord = normalize(position.xyz);
+    //fragTexCoord = position;
 }"""
 
 TEXTURE_FRAG = """#version 330 core
 uniform samplerCube diffuseMap;
-varying mediump vec3 fragTexCoord;
+in mediump vec3 fragTexCoord;
 //in vec3 fragTexCoord;
 out vec4 outColor;
 void main() {
@@ -514,7 +517,8 @@ class Trex(Node):
         self.add(*load('trex.obj'))  # just load the cylinder from file
 
 
-SKY_BOX_VERTICES = [-1.0,  1.0, -1.0,
+SKY_BOX_VERTICES = [
+    -1.0,  1.0, -1.0,
     -1.0, -1.0, -1.0,
      1.0, -1.0, -1.0,
      1.0, -1.0, -1.0,
@@ -550,6 +554,9 @@ SKY_BOX_VERTICES = [-1.0,  1.0, -1.0,
      1.0, -1.0, -1.0,
     -1.0, -1.0,  1.0,
      1.0, -1.0,  1.0]
+
+
+SKY_BOX_VERTICES = list(map(lambda x:x*10, SKY_BOX_VERTICES))
 
 # -------------- main program and scene setup --------------------------------
 def main():
