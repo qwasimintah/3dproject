@@ -124,7 +124,7 @@ def avg_neighbours_grid(array, x, y, height, width, normals_proj):
             normals_proj[x*width + y] = abs(nrm[2])
         if y > 0:
             nrm = get_normal(u - o, l - o)
-            neighbours.append(nrm)
+            neighbours.append(-1*nrm)
             #normals_proj[x*width + y] = abs(nrm[2])
 #    if x > 0:
 #        if y > 0:

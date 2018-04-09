@@ -5,6 +5,7 @@ Python OpenGL practical application.
 # Python built-in modules
 import os                           # os function, i.e. checking file status
 
+
 # External, non built-in modules
 import OpenGL.GL as GL              # standard Python OpenGL wrapper
 import glfw                         # lean window system wrapper for OpenGL

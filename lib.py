@@ -19,7 +19,6 @@ from transform import Trackball, identity
 from PIL import Image               # load images for textures
 
 
-
 # ------------ low level OpenGL object wrappers ----------------------------
 class Shader:
     """ Helper class to create and automatically destroy shader program """
