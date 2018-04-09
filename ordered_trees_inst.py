@@ -187,6 +187,60 @@ class VertexArray:
         GL.glDeleteVertexArrays(1, [self.glid])
         GL.glDeleteBuffers(len(self.buffers), self.buffers)
 
+class VertexArrayInst:
+    """helper class to create and self destroy vertex array objects."""
+    def __init__(self, attributes, index=None, usage=GL.GL_STATIC_DRAW):
+        """ Vertex array from attributes and optional index array. Vertex
+            attribs should be list of arrays with dim(0) indexed by vertex. """
+
+        # create vertex array object, bind it
+        self.glid = GL.glGenVertexArrays(1)
+        GL.glBindVertexArray(self.glid)
+        self.buffers = []  # we will store buffers in a list
+        nb_primitives, size = 0, 0
+
+        # load a buffer per initialized vertex attribute (=dictionary)
+        for loc, data in enumerate(attributes):
+            if data is None:
+                continue
+
+            # bind a new vbo, upload its data to GPU, declare its size and type
+            self.buffers += [GL.glGenBuffers(1)]
+            data = np.array(data, np.float32, copy=False)
+            nb_primitives, size = data.shape
+            GL.glEnableVertexAttribArray(loc)  # activates for current vao only
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.buffers[-1])
+            GL.glBufferData(GL.GL_ARRAY_BUFFER, data, usage)
+            GL.glVertexAttribPointer(loc, size, GL.GL_FLOAT, False, 0, None)
+
+        # optionally create and upload an index buffer for this object
+        self.draw_command = GL.glDrawArraysInstanced
+        self.arguments = (0, nb_primitives)
+        if index is not None:
+            self.buffers += [GL.glGenBuffers(1)]
+            index_buffer = np.array(index, np.int32, copy=False)
+            GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, self.buffers[-1])
+            GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, index_buffer, usage)
+            self.draw_command = GL.glDrawElementsInstanced
+            self.arguments = (index_buffer.size, GL.GL_UNSIGNED_INT, None)
+            print(self.arguments)
+
+        # cleanup and unbind so no accidental subsequent state update
+        GL.glBindVertexArray(0)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+        GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, 0)
+
+    def draw(self, primitive):
+        """draw a vertex array, either as direct array or indexed array"""
+        GL.glBindVertexArray(self.glid)
+        self.draw_command(primitive, *self.arguments, 300)
+        GL.glBindVertexArray(0)
+
+
+    def __del__(self):  # object dies => kill GL array and buffers from GPU
+        GL.glDeleteVertexArrays(1, [self.glid])
+        GL.glDeleteBuffers(len(self.buffers), self.buffers)
+
 
 class Node:
     """ Scene graph transform and parameter broadcast node """
@@ -603,6 +657,8 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 tex;
 
+uniform vec3 offsets[300];
+
 out vec3 nout;
 out vec3 l;
 uniform vec3 ks;
@@ -610,7 +666,10 @@ out vec3 ks_out;
 
 out vec2 fragTexCoord;
 void main() {
-    gl_Position = modelviewprojection * vec4(position, 1);
+    vec3 offset = offsets[gl_InstanceID];
+    //vec3 offset = offsets[0];
+    gl_Position = modelviewprojection * vec4(position + offset, 1);
+    //gl_Position = modelviewprojection * vec4(position + vec3(1,0,0), 1);
     l = normalize(light);
     nout = normal;
     ks_out = ks;
@@ -656,7 +715,8 @@ class TexturedMesh:
         self.tex_uv = attributes[1]
         self.normals = (attributes[2]) # why put them in self?
         #print("THIS IS NORMALS", self.normals)
-        self.vertex_array = VertexArray([vertices, self.normals, self.tex_uv], index)
+        #self.vertex_array = VertexArray([vertices, self.normals, self.tex_uv], index)
+        self.vertex_array = VertexArrayInst([vertices, self.normals, self.tex_uv], index)
 
         # interactive toggles
         self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
@@ -684,11 +744,25 @@ class TexturedMesh:
                 self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
         GL.glUseProgram(self.shader.glid)
 
+        t = glfw.get_time()
+
+        #offsets for instances
+        translations = np.zeros(shape=(300, 3))
+
+        for i in range(300):
+            translations[i][0] = i
+            translations[i][2] = (i * 0.5*t) % 200
+
+        for i in range(300):
+            lco = GL.glGetUniformLocation(self.shader.glid, 'offsets[%d]' % i)
+            GL.glUniform3fv(lco, 1, translations[i])
+            #print(translations[i])
+            #GL.glUniform3fv(lco, 1, (20.0,0,-30.0))
+
         # projection geometry
         ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
         GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
 
-        t = glfw.get_time()
         l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
         #GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
         GL.glUniform3fv(l_location, 1, (math.cos(t), math.sin(t), 0))
@@ -1048,49 +1122,52 @@ def main():
 
     #viewer.add(cylinder_node)
     #viewer.add(TexturedPlane('grass_green.png'))
-    size, step = 200, 25
-    [vertices, normals], faces = generate_perlin_grid(size, step=step)
-    for i,x in enumerate(normals):
-        normals[i] = -1*x
+    #size, step = 200, 25
+    #[vertices, normals], faces = generate_perlin_grid(size, step=step)
+    #for i,x in enumerate(normals):
+    #    normals[i] = -1*x
 
-    tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
-    for i in range(len(tex_uv)):
-        tex_uv[i][0] = (i // (size + 1))/(size + 1)
-        tex_uv[i][1] = (i % (size + 1))/(size + 1)
+    #tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
+    #for i in range(len(tex_uv)):
+    #    tex_uv[i][0] = (i // (size + 1))/(size + 1)
+    #    tex_uv[i][1] = (i % (size + 1))/(size + 1)
 
-    # THIS IS STUPID REMOVE IT LATER
-    for x in vertices:
-        x[1], x[2] = x[2], x[1]
-    for x in normals:
-        x[1], x[2] = x[2], x[1]
+    ## THIS IS STUPID REMOVE IT LATER
+    #for x in vertices:
+    #    x[1], x[2] = x[2], x[1]
+    #for x in normals:
+    #    x[1], x[2] = x[2], x[1]
 
 
-    tree_bases = []
-    for i, x in enumerate(normals):
-        #print(x[1])
-        if abs(x[1]) > 0.96:
-            p = i // (size + 1)
-            q = i % (size + 1)
-            tree_bases.append((p, vertices[i][1], q))
-    number_trees = len(tree_bases)
-    print("nb_trees: ", number_trees)
-    if number_trees > 20:
-        #tree_bases = tree_bases[:20]
-        tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//150)]
-    #viewer.add(TexturedPlane('grass.png'))
+    #tree_bases = []
+    #for i, x in enumerate(normals):
+    #    #print(x[1])
+    #    if abs(x[1]) > 0.96:
+    #        p = i // (size + 1)
+    #        q = i % (size + 1)
+    #        tree_bases.append((p, vertices[i][1], q))
+    #number_trees = len(tree_bases)
+    #print("nb_trees: ", number_trees)
+    #if number_trees > 20:
+    #    #tree_bases = tree_bases[:20]
+    #    tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//150)]
+    ##viewer.add(TexturedPlane('grass.png'))
 
-    #trees = load_textured_n_instances("Tree/Tree.obj", 25)
-    trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
-    #tree1, tree2 = load_textured2("Tree/Tree.obj")
-    #tree2 = load_textured("Tree/Tree.obj")
-    viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
-    for i, tree in  enumerate(trees):
-        for m in tree:
-            #m.transform = identity()
-            #m.transform = translate(3*(i//5), 0, 3*(i%5))
-            m.transform = translate(*(tree_bases[i]))
-        viewer.add(*tree)
-            #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
+    tree = load_textured("Tree/Tree.obj")
+    viewer.add(*tree)
+
+    ##trees = load_textured_n_instances("Tree/Tree.obj", 25)
+    #trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
+    ##tree1, tree2 = load_textured2("Tree/Tree.obj")
+    ##tree2 = load_textured("Tree/Tree.obj")
+    #viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
+    #for i, tree in  enumerate(trees):
+    #    for m in tree:
+    #        #m.transform = identity()
+    #        #m.transform = translate(3*(i//5), 0, 3*(i%5))
+    #        m.transform = translate(*(tree_bases[i]))
+    #    viewer.add(*tree)
+    #        #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
     #for m in tree2:
     #    m.transform = translate(1,1,1)

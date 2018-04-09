@@ -6,6 +6,7 @@ Python OpenGL practical application.
 import os                           # os function, i.e. checking file status
 from itertools import cycle
 import sys
+from bisect import bisect_left      # search sorted keyframe lists
 
 # External, non built-in modules
 import OpenGL.GL as GL              # standard Python OpenGL wrapper
@@ -19,7 +20,9 @@ from transform import Trackball, identity
 #from grid_normals import generate_grid, generate_perlin_grid 
 from grid_texture import generate_perlin_grid
 from PIL import Image               # load images for textures
-import copy
+from transform import (lerp, quaternion_slerp, quaternion_matrix, quaternion,
+                       quaternion_from_euler)
+#import copy
 
 import math
 
@@ -202,7 +205,7 @@ class Node:
         """ Recursive draw, passing down named parameters & model matrix. """
         # merge named parameters given at initialization with those given here
         param = dict(param, **self.param)
-        model = self.transform @ model
+        model = model @ self.transform 
         for child in self.children:
             child.draw(projection, view, model, **param)
 
@@ -279,17 +282,25 @@ uniform mat4 boneMatrix[MAX_BONES];
 
 // ---- vertex attributes
 layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 color;
-layout(location = 2) in vec4 bone_ids;
-layout(location = 3) in vec4 bone_weights;
+layout(location = 1) in vec2 tex;
+//layout(location = 2) in vec3 color;
+layout(location = 2) in vec3 normal;
+layout(location = 3) in vec4 bone_ids;
+layout(location = 4) in vec4 bone_weights;
+
+uniform vec3 light;
+out vec3 nout;
+out vec3 l;
+uniform vec3 ks;
+out vec3 ks_out;
 
 // ----- interpolated attribute variables to be passed to fragment shader
-out vec3 fragColor;
+//out vec3 fragColor;
+out vec2 fragTexCoord;
 
 void main() {
 
     // ------ creation of the skinning deformation matrix
-    //mat4 skinMatrix = mat4(1.);  // TODO complete shader here for exercise 1!
 
     mat4 skinMatrix = mat4(0.);
     int i;
@@ -298,8 +309,6 @@ void main() {
         s = s + bone_weights[i];
     }
     for(i=0; i < MAX_VERTEX_BONES; i++){
-        //skinMatrix = skinMatrix + bone_weights[int(bone_ids[i])]*boneMatrix[int(bone_ids[i])];
-        //skinMatrix = skinMatrix + bone_weights[int(bone_ids[i])]*boneMatrix[int(bone_ids[i])];
         skinMatrix = skinMatrix + bone_weights[i]*boneMatrix[int(bone_ids[i])];
     }
 
@@ -307,29 +316,39 @@ void main() {
     vec4 wPosition4 = (1./s) * skinMatrix * vec4(position, 1.0);
     gl_Position = projection * view * wPosition4;
 
-    fragColor = color;
+    l = normalize(light);
+    nout = normal;
+    ks_out = ks;
+    fragTexCoord = tex;
+
+    //fragColor = color;
 }
 """ % (MAX_VERTEX_BONES, MAX_BONES)
 
 
 class SkinnedMesh:
     """class of skinned mesh nodes in scene graph """
-    def __init__(self, attributes, bone_nodes, bone_offsets, index=None):
+    def __init__(self, texture, attributes, bone_nodes, bone_offsets, index=None):
 
         # setup shader attributes for linear blend skinning shader
         self.vertex_array = VertexArray(attributes, index)
 
         # feel free to move this up in Viewer as shown in previous practicals
-        self.skinning_shader = Shader(SKINNING_VERT, COLOR_FRAG)
+        #self.skinning_shader = Shader(SKINNING_VERT, COLOR_FRAG)
+        #self.skinning_shader = Shader(SKINNING_VERT, TEXTURE_FRAG)
+        self.shader = Shader(SKINNING_VERT, TEXTURE_FRAG)
 
         # store skinning data
         self.bone_nodes = bone_nodes
         self.bone_offsets = bone_offsets
 
+        self.texture = texture
+
     def draw(self, projection, view, _model, **_kwargs):
         """ skinning object draw method """
 
-        shid = self.skinning_shader.glid
+        #shid = self.skinning_shader.glid
+        shid = self.shader.glid
         GL.glUseProgram(shid)
 
         # setup camera geometry parameters
@@ -337,6 +356,19 @@ class SkinnedMesh:
         GL.glUniformMatrix4fv(loc, 1, True, projection)
         loc = GL.glGetUniformLocation(shid, 'view')
         GL.glUniformMatrix4fv(loc, 1, True, view)
+
+        # projection geometry
+        ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
+        GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
+
+        t = glfw.get_time()
+        l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
+        GL.glUniform3fv(l_location, 1, (math.cos(t), math.sin(t), 0))
+
+        loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture.glid)
+        GL.glUniform1i(loc, 0)
 
         # bone world transform matrices need to be passed for skinning
         for bone_id, node in enumerate(self.bone_nodes):
@@ -349,6 +381,7 @@ class SkinnedMesh:
         self.vertex_array.draw(GL.GL_TRIANGLES)
 
         # leave with clean OpenGL state, to make it easier to detect problems
+        GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         GL.glUseProgram(0)
 
 
@@ -494,6 +527,23 @@ def load_skinned(file):
 
     root_node = make_nodes(scene.rootnode)
 
+    path = os.path.dirname(file)
+    for mat in scene.materials:
+        mat.tokens = dict(reversed(list(mat.properties.items())))
+        if 'file' in mat.tokens:  # texture file token
+            print("file in math tokens")
+            tname = mat.tokens['file'].split('/')[-1].split('\\')[-1]
+            # search texture in file's whole subdir since path often screwed up
+            tname = [os.path.join(d[0], f) for d in os.walk(path) for f in d[2]
+                     if tname.startswith(f) or f.startswith(tname)]
+            print(tname)
+            if tname:
+                print("tname = %s found" % tname[0])
+                mat.texture = Texture(tname[0])
+            else:
+                print('Failed to find texture:', tname)
+
+
     # ---- create SkinnedMesh objects
     for mesh in scene.meshes:
         # -- skinned mesh: weights given per bone => convert per vertex for GPU
@@ -511,9 +561,29 @@ def load_skinned(file):
         bone_nodes = [nodes[bone.name][0] for bone in mesh.bones]
         bone_offsets = [bone.offsetmatrix for bone in mesh.bones]
 
+        # python, can I please load some textures as well, please?
+        print("mat index : ", mesh.materialindex, "all: ", [mesh.materialindex for mesh in scene.meshes])
+        print("nb mats ", len(scene.materials), "mats : ", scene.materials)
+        #texture = scene.materials[mesh.materialindex].texture
+
+        # for dinosaurs (retarded indices)
+        #texture = scene.materials[int(mesh.materialindex/2)].texture
+        if mesh.materialindex == 2:
+            texture = scene.materials[2].texture
+        if mesh.materialindex == 1:
+            texture = scene.materials[1].texture
+
+        tex_uv = ((0, 1) + mesh.texturecoords[0][:, :2] * (1, -1)
+                  if mesh.texturecoords.size else None)
+        ##meshes.append(TexturedMesh(texture, [mesh.vertices, tex_uv, mesh.normals], mesh.faces))
+
         # initialize skinned mesh and store in pyassimp_mesh for node addition
-        mesh.skinned_mesh = SkinnedMesh(
-                [mesh.vertices, mesh.normals, v_bone['id'], v_bone['weight']],
+        ##mesh.skinned_mesh = SkinnedMesh(
+        ##        [mesh.vertices, mesh.normals, v_bone['id'], v_bone['weight']],
+        ##        bone_nodes, bone_offsets, mesh.faces
+        ##)
+        mesh.skinned_mesh = SkinnedMesh(texture,
+                [mesh.vertices, tex_uv, mesh.normals, v_bone['id'], v_bone['weight']],
                 bone_nodes, bone_offsets, mesh.faces
         )
 
@@ -1048,54 +1118,63 @@ def main():
 
     #viewer.add(cylinder_node)
     #viewer.add(TexturedPlane('grass_green.png'))
-    size, step = 200, 25
-    [vertices, normals], faces = generate_perlin_grid(size, step=step)
-    for i,x in enumerate(normals):
-        normals[i] = -1*x
-
-    tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
-    for i in range(len(tex_uv)):
-        tex_uv[i][0] = (i // (size + 1))/(size + 1)
-        tex_uv[i][1] = (i % (size + 1))/(size + 1)
-
-    # THIS IS STUPID REMOVE IT LATER
-    for x in vertices:
-        x[1], x[2] = x[2], x[1]
-    for x in normals:
-        x[1], x[2] = x[2], x[1]
 
 
-    tree_bases = []
-    for i, x in enumerate(normals):
-        #print(x[1])
-        if abs(x[1]) > 0.96:
-            p = i // (size + 1)
-            q = i % (size + 1)
-            tree_bases.append((p, vertices[i][1], q))
-    number_trees = len(tree_bases)
-    print("nb_trees: ", number_trees)
-    if number_trees > 20:
-        #tree_bases = tree_bases[:20]
-        tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//150)]
-    #viewer.add(TexturedPlane('grass.png'))
+    #------------------Multiple Trees----------------------------------------
+    #size, step = 200, 25
+    #[vertices, normals], faces = generate_perlin_grid(size, step=step)
+    #for i,x in enumerate(normals):
+    #    normals[i] = -1*x
 
-    #trees = load_textured_n_instances("Tree/Tree.obj", 25)
-    trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
-    #tree1, tree2 = load_textured2("Tree/Tree.obj")
-    #tree2 = load_textured("Tree/Tree.obj")
-    viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
-    for i, tree in  enumerate(trees):
-        for m in tree:
-            #m.transform = identity()
-            #m.transform = translate(3*(i//5), 0, 3*(i%5))
-            m.transform = translate(*(tree_bases[i]))
-        viewer.add(*tree)
-            #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
-    #tree2 = copy.deepcopy(tree1)
-    #for m in tree2:
-    #    m.transform = translate(1,1,1)
-    #viewer.add(*tree1)
-    #viewer.add(*tree2)
+    #tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
+    #for i in range(len(tex_uv)):
+    #    tex_uv[i][0] = (i // (size + 1))/(size + 1)
+    #    tex_uv[i][1] = (i % (size + 1))/(size + 1)
+
+    ## THIS IS STUPID REMOVE IT LATER
+    #for x in vertices:
+    #    x[1], x[2] = x[2], x[1]
+    #for x in normals:
+    #    x[1], x[2] = x[2], x[1]
+
+
+    #tree_bases = []
+    #for i, x in enumerate(normals):
+    #    #print(x[1])
+    #    if abs(x[1]) > 0.96:
+    #        p = i // (size + 1)
+    #        q = i % (size + 1)
+    #        tree_bases.append((p, vertices[i][1], q))
+    #number_trees = len(tree_bases)
+    #print("nb_trees: ", number_trees)
+    #if number_trees > 20:
+    #    #tree_bases = tree_bases[:20]
+    #    tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//150)]
+    ##viewer.add(TexturedPlane('grass.png'))
+
+    ##trees = load_textured_n_instances("Tree/Tree.obj", 25)
+    #trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
+    ##tree1, tree2 = load_textured2("Tree/Tree.obj")
+    ##tree2 = load_textured("Tree/Tree.obj")
+    #viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
+    #for i, tree in  enumerate(trees):
+    #    for m in tree:
+    #        #m.transform = identity()
+    #        #m.transform = translate(3*(i//5), 0, 3*(i%5))
+    #        m.transform = translate(*(tree_bases[i]))
+    #    viewer.add(*tree)
+    #        #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
+    ##tree2 = copy.deepcopy(tree1)
+    ##for m in tree2:
+    ##    m.transform = translate(1,1,1)
+    ##viewer.add(*tree1)
+    ##viewer.add(*tree2)
+    #------------------------------------------------------------------------
+
+    #------------------Textured And Animated Dinosaurs----------------------
+    viewer.add(*load_skinned("dino/Dinosaurus_attack.dae"))
+    #viewer.add(*load_skinned("ninja/ninja.ms3d"))
+    #-----------------------------------------------------------------------
 
     #if len(sys.argv) < 2:
     if False: 
