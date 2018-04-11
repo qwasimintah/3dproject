@@ -5,7 +5,7 @@ from transform import lerp, normalized
 import numpy as np
 import random
 import pickle
-from gen_texture import generate_texture
+#from gen_texture import generate_texture
 
 def make_vertex(vertices, n, x, y, height, width, centered=False):
     if centered:

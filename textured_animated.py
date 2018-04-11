@@ -18,7 +18,7 @@ from transform import translate, rotate, scale, vec, identity, lerp
 #from h_loader import *
 from transform import Trackball, identity
 #from grid_normals import generate_grid, generate_perlin_grid 
-from grid_texture import generate_perlin_grid
+#from grid_texture import generate_perlin_grid
 from PIL import Image               # load images for textures
 from transform import (lerp, quaternion_slerp, quaternion_matrix, quaternion,
                        quaternion_from_euler)

@@ -257,7 +257,7 @@ class CubeTexture:
         format = [GL.GL_LUMINANCE, GL.GL_LUMINANCE_ALPHA, GL.GL_RGB, GL.GL_RGBA]
         sky_faces = ['morning_rt.png', 'morning_lf.png', 'morning_up.png', 'morning_dn.png', 'morning_bk.png', 'morning_ft.png']
         sky_faces = ['morning_ft.png', 'morning_bk.png', 'morning_up.png', 'morning_dn.png', 'morning_rt.png', 'morning_lf.png']
-        sky_faces = ['ft.png', 'bk.png', 'up.png', 'dn.png', 'rt.png', 'lf.png']
+        sky_faces = ['hills_ft.png', 'hills_bk.png', 'hills_up.png', 'hills_dn.png', 'hills_rt.png', 'hills_lf.png']
         try:
             for i,file in enumerate(sky_faces):
             # imports image as a numpy array in exactly right format
