@@ -17,7 +17,7 @@ import pyassimp.errors              # assimp error management + exceptions
 from transform import translate, rotate, scale, vec, identity, lerp
 #from h_loader import *
 from transform import Trackball, identity
-#from grid_normals import generate_grid, generate_perlin_grid 
+#from grid_normals import generate_grid, generate_perlin_grid f
 from grid_texture import generate_perlin_grid
 
 from PIL import Image               # load images for textures
@@ -735,6 +735,11 @@ class CubeTexturedPlane:
 
         # projection geometry
         loc = GL.glGetUniformLocation(self.shader.glid, 'modelviewprojection')
+
+        view[0][3]=0
+        view[1][3]=0
+        view[2][3]=0
+        view[3][3]=1
         GL.glUniformMatrix4fv(loc, 1, True, projection @ view @ model)
 
         # texture access setups
