@@ -391,6 +391,8 @@ class Viewer:
         #GL.glEnable(GL.GL_CULL_FACE)
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glFrontFace ( GL.GL_CW )
+        GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);
+        GL. glEnable(GL.GL_BLEND);
         #GL.glCullFace( GL.GL_BACK)
         #GL.glDepthFunc(GL.GL_LEQUAL);
         # compile and initialize shader programs once globally
