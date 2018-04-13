@@ -1172,7 +1172,7 @@ def main():
     #------------------------------------------------------------------------
 
     #------------------Textured And Animated Dinosaurs----------------------
-    viewer.add(*load_skinned("dino/Dinosaurus_attack.dae"))
+    viewer.add(*load_skinned("dino/Dinosaurus_run.dae"))
     #viewer.add(*load_skinned("ninja/ninja.ms3d"))
     #-----------------------------------------------------------------------
 
