@@ -199,6 +199,7 @@ class Trackball:
     def view_matrix(self):
         """ View matrix transformation, including distance to target point """
         return translate(*self.pos2d, -self.distance) @ self.matrix()
+        #return self.matrix()
 
     def projection_matrix(self, winsize):
         """ Projection matrix with z-clipping range adaptive to distance """

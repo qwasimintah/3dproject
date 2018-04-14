@@ -29,7 +29,7 @@ def main():
     """ create a window, add scene objects, then run rendering loop """
     viewer = Viewer()
 
-    files = os.listdir("hw_morning")
+    files = os.listdir("sky")
     print(files)
 
     #cylinder_node = Node(name='my_cylinder', transform=translate(-1, 0, 0), color=(1, 0, 0.5, 1))

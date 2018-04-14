@@ -179,7 +179,9 @@ def main():
 
     # place instances of our basic objects
     #viewer.add(SimplePyramid())
-    viewer.add(*load_textured("bunny/bunny.obj"))
+    #viewer.add(*load_textured("bunny/bunny.obj"))
+    viewer.add(TexturedPlane('grass.png'))
+    #viewer.add(TexturedPlane('grass.png'))
     #viewer.add(SimplePyramidPlain())
 
     # start rendering loop

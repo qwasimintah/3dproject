@@ -13,7 +13,7 @@ import glfw                         # lean window system wrapper for OpenGL
 import numpy as np                  # all matrix manipulations & OpenGL args
 import pyassimp                     # 3D ressource loader
 import pyassimp.errors              # assimp error management + exceptions
-from transform import translate, rotate, scale, vec, identity, lerp, normalized
+from transform import translate, rotate, scale, vec, identity, lerp
 #from h_loader import *
 from transform import Trackball, identity
 #from grid_normals import generate_grid, generate_perlin_grid 
@@ -91,6 +91,26 @@ out vec4 outColor;
 void main() {
     outColor = vec4(fragColor, 1);
 }"""
+#
+
+#class ColorMesh:
+#
+#    def __init__(self, attributes, index=None):
+#        self.vertex_array = VertexArray(attributes, index)
+#
+#    def draw(self, projection, view, model, color_shader):
+#
+#        names = ['view', 'projection', 'model']
+#        loc = {n: GL.glGetUniformLocation(color_shader.glid, n) for n in names}
+#        GL.glUseProgram(color_shader.glid)
+#
+#        GL.glUniformMatrix4fv(loc['view'], 1, True, view)
+#        GL.glUniformMatrix4fv(loc['projection'], 1, True, projection)
+#        GL.glUniformMatrix4fv(loc['model'], 1, True, model)
+#
+#        # draw triangle as GL_TRIANGLE vertex array, draw array call
+#        self.vertex_array.draw(GL.GL_TRIANGLES)
+
 
 # ------------  Scene object classes ------------------------------------------
 class VertexArray:
@@ -135,6 +155,26 @@ class VertexArray:
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
         GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, 0)
 
+    #def draw(self, primitive):
+    #def draw(self, projection, view, model, color_shader):
+    #    """draw a vertex array, either as direct array or indexed array"""
+    #    GL.glBindVertexArray(self.glid)
+
+
+    #    names = ['view', 'projection', 'model']
+    #    loc = {n: GL.glGetUniformLocation(color_shader.glid, n) for n in names}
+    #    GL.glUseProgram(color_shader.glid)
+
+    #    GL.glUniformMatrix4fv(loc['view'], 1, True, view)
+    #    GL.glUniformMatrix4fv(loc['projection'], 1, True, projection)
+    #    GL.glUniformMatrix4fv(loc['model'], 1, True, model)
+
+    #    # draw triangle as GL_TRIANGLE vertex array, draw array call
+    #    #self.vertex_array.draw(GL.GL_TRIANGLES)
+    #    self.draw_command(GL.GL_TRIANGLES, *self.arguments)
+    #    #GL.glDrawArrays(GL.GL_TRIANGLES, self.arguments[0], GL.GL_UNSIGNED_INT, None)
+    #    GL.glBindVertexArray(0)
+
 
     def draw(self, primitive):
         """draw a vertex array, either as direct array or indexed array"""
@@ -147,10 +187,9 @@ class VertexArray:
         GL.glDeleteVertexArrays(1, [self.glid])
         GL.glDeleteBuffers(len(self.buffers), self.buffers)
 
-
 class VertexArrayInst:
     """helper class to create and self destroy vertex array objects."""
-    def __init__(self, nb_instances, attributes, index=None, usage=GL.GL_STATIC_DRAW):
+    def __init__(self, attributes, index=None, usage=GL.GL_STATIC_DRAW):
         """ Vertex array from attributes and optional index array. Vertex
             attribs should be list of arrays with dim(0) indexed by vertex. """
 
@@ -159,8 +198,6 @@ class VertexArrayInst:
         GL.glBindVertexArray(self.glid)
         self.buffers = []  # we will store buffers in a list
         nb_primitives, size = 0, 0
-
-        self.nb_instances = nb_instances
 
         # load a buffer per initialized vertex attribute (=dictionary)
         for loc, data in enumerate(attributes):
@@ -196,7 +233,7 @@ class VertexArrayInst:
     def draw(self, primitive):
         """draw a vertex array, either as direct array or indexed array"""
         GL.glBindVertexArray(self.glid)
-        self.draw_command(primitive, *self.arguments, self.nb_instances)
+        self.draw_command(primitive, *self.arguments, 300)
         GL.glBindVertexArray(0)
 
 
@@ -620,32 +657,7 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 tex;
 
-out vec3 nout;
-out vec3 l;
-uniform vec3 ks;
-out vec3 ks_out;
-
-out vec2 fragTexCoord;
-void main() {
-    gl_Position = modelviewprojection * vec4(position, 1);
-    l = normalize(light);
-    nout = normal;
-    ks_out = ks;
-    fragTexCoord = tex;
-}"""
-
-
-TEXTURE_VERT_INST = """#version 330 core
-
-
-uniform mat4 modelviewprojection;
-uniform vec3 light;
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 normal;
-layout(location = 2) in vec2 tex;
-
-// TODO: Parametrize
-uniform vec3 offsets[1000];
+uniform vec3 offsets[300];
 
 out vec3 nout;
 out vec3 l;
@@ -655,12 +667,15 @@ out vec3 ks_out;
 out vec2 fragTexCoord;
 void main() {
     vec3 offset = offsets[gl_InstanceID];
+    //vec3 offset = offsets[0];
     gl_Position = modelviewprojection * vec4(position + offset, 1);
+    //gl_Position = modelviewprojection * vec4(position + vec3(1,0,0), 1);
     l = normalize(light);
     nout = normal;
     ks_out = ks;
     fragTexCoord = tex;
 }"""
+
 TEXTURE_FRAG = """#version 330 core
 in vec3 nout;
 in vec3 l;
@@ -700,7 +715,8 @@ class TexturedMesh:
         self.tex_uv = attributes[1]
         self.normals = (attributes[2]) # why put them in self?
         #print("THIS IS NORMALS", self.normals)
-        self.vertex_array = VertexArray([vertices, self.normals, self.tex_uv], index)
+        #self.vertex_array = VertexArray([vertices, self.normals, self.tex_uv], index)
+        self.vertex_array = VertexArrayInst([vertices, self.normals, self.tex_uv], index)
 
         # interactive toggles
         self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
@@ -728,11 +744,25 @@ class TexturedMesh:
                 self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
         GL.glUseProgram(self.shader.glid)
 
+        t = glfw.get_time()
+
+        #offsets for instances
+        translations = np.zeros(shape=(300, 3))
+
+        for i in range(300):
+            translations[i][0] = i
+            translations[i][2] = (i * 0.5*t) % 200
+
+        for i in range(300):
+            lco = GL.glGetUniformLocation(self.shader.glid, 'offsets[%d]' % i)
+            GL.glUniform3fv(lco, 1, translations[i])
+            #print(translations[i])
+            #GL.glUniform3fv(lco, 1, (20.0,0,-30.0))
+
         # projection geometry
         ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
         GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
 
-        t = glfw.get_time()
         l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
         #GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
         GL.glUniform3fv(l_location, 1, (math.cos(t), math.sin(t), 0))
@@ -755,78 +785,6 @@ class TexturedMesh:
         GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         GL.glUseProgram(0)
 
-
-
-class TexturedMeshInst:
-    """ Simple first textured object """
-
-    def __init__(self, texture, nb_instances, attributes, index):
-        # feel free to move this up in the viewer as per other practicals
-        self.shader = Shader(TEXTURE_VERT_INST, TEXTURE_FRAG)
-
-        # triangle and face buffers
-        vertices = attributes[0]
-        self.tex_uv = attributes[1]
-        self.normals = (attributes[2]) # why put them in self?
-        self.vertex_array = VertexArrayInst(nb_instances, [vertices, self.normals, self.tex_uv], index)
-
-        # interactive toggles
-        self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
-                           GL.GL_CLAMP_TO_BORDER, GL.GL_CLAMP_TO_EDGE])
-        self.filter = cycle([(GL.GL_NEAREST, GL.GL_NEAREST),
-                             (GL.GL_LINEAR, GL.GL_LINEAR),
-                             (GL.GL_LINEAR, GL.GL_LINEAR_MIPMAP_LINEAR)])
-        self.wrap_mode, self.filter_mode = next(self.wrap), next(self.filter)
-        self.file = texture
-        self.transform = identity()
-
-        # setup texture and upload it to GPU
-        self.texture = texture
-        self.positions = None
-
-    def draw(self, projection, view, model, win=None, **_kwargs):
-
-        # some interactive elements
-        if win!=None:
-            if glfw.get_key(win, glfw.KEY_F6) == glfw.PRESS:
-                self.wrap_mode = next(self.wrap)
-                self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
-
-            if glfw.get_key(win, glfw.KEY_F7) == glfw.PRESS:
-                self.filter_mode = next(self.filter)
-                self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
-        GL.glUseProgram(self.shader.glid)
-
-        # offset the instance
-        for i, pos in enumerate(self.positions):
-            loc_offset = GL.glGetUniformLocation(self.shader.glid, 'offsets[%d]' % i)
-            GL.glUniform3fv(loc_offset, 1, pos)
-
-        # projection geometry
-        ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
-        GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
-
-        t = glfw.get_time()
-        l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
-        #GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
-        GL.glUniform3fv(l_location, 1, (math.cos(t), math.sin(t), 0))
-
-        #GL.glUniform3fv(l_location, 1, (0.5, 0, -0.75))
-        loc = GL.glGetUniformLocation(self.shader.glid, 'modelviewprojection')
-        tex_loc = GL.glGetUniformLocation(self.shader.glid, 'tex_uv')
-        model = model @ self.transform
-        GL.glUniformMatrix4fv(loc, 1, True, projection @ view @ model)
-        GL.glUniform2fv(tex_loc, 0, self.tex_uv) 
-        # texture access setups
-        loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
-        GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture.glid)
-        GL.glUniform1i(loc, 0)
-        self.vertex_array.draw(GL.GL_TRIANGLES)
-
-        # leave clean state for easier debugging
-        GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-        GL.glUseProgram(0)
 
 
 
@@ -982,26 +940,27 @@ def load_textured_n_instances(file, nb_instances):
                 print('Failed to find texture:', tname)
 
     # prepare textured mesh
-    #instances = []
-    meshes = []
-    for mesh in scene.meshes:
-        texture = scene.materials[mesh.materialindex].texture
-        #print(texture)
-        # tex coords in raster order: compute 1 - y to follow OpenGL convention
-        tex_uv = ((0, 1) + mesh.texturecoords[0][:, :2] * (1, -1)
-                  if mesh.texturecoords.size else None)
-        #print(tex_uv)
-        # create the textured mesh object from texture, attributes, and indices
-        meshes.append(TexturedMeshInst(texture, nb_instances, [mesh.vertices, tex_uv, mesh.normals], mesh.faces))
+    instances = []
+    for inst in range(nb_instances):
+        meshes = []
+        for mesh in scene.meshes:
+            texture = scene.materials[mesh.materialindex].texture
+            #print(texture)
+            # tex coords in raster order: compute 1 - y to follow OpenGL convention
+            tex_uv = ((0, 1) + mesh.texturecoords[0][:, :2] * (1, -1)
+                      if mesh.texturecoords.size else None)
+            #print(tex_uv)
+            # create the textured mesh object from texture, attributes, and indices
+            meshes.append(TexturedMesh(texture, [mesh.vertices, tex_uv, mesh.normals], mesh.faces))
 
         size = sum((mesh.faces.shape[0] for mesh in scene.meshes))
         print('Loaded %s\t(%d meshes, %d faces)' % (file, len(scene.meshes), size))
 
 
+        instances.append(meshes)
 
     pyassimp.release(scene)
-    #return instances 
-    return meshes
+    return instances 
 ##################################################################
 
 
@@ -1034,9 +993,6 @@ class Viewer:
     """ GLFW viewer window, with classic initialization & graphics loop """
 
     def __init__(self, width=640, height=480):
-        self.pos = np.array([0,0,0], dtype=np.float32)
-        self.dir = np.array([0,0,0], dtype=np.float32)
-        self.mov_speed = 0.5
 
         # version hints: create GL window with >= OpenGL 3.3 and core profile
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -1110,20 +1066,7 @@ class Viewer:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
 
             winsize = glfw.get_window_size(self.win)
-            #view = translate(0, 5*glfw.get_time(), 0) @ self.trackball.view_matrix()
             view = self.trackball.view_matrix()
-            #self.dir = normalized(self.trackball.view_matrix()[..., 2][:3])
-            #print(self.dir)
-
-            #self.pos += -1*normalized(view[..., 2][:3])
-
-            #self.view = translate(*(-10**normalized(view[..., 3][:3]))) @ view
-            view = translate(*self.pos) @ view
-            #view = translate(*(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix() 
-            #view = translate(*(10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix()
-            #view = self.trackball.view_matrix()
-            #view[3][0] = view[2][0]
-            #print(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))
             projection = self.trackball.projection_matrix(winsize)
 
             # draw our scene objects
@@ -1150,24 +1093,12 @@ class Viewer:
     def on_key(self, _win, key, _scancode, action, _mods):
         """ 'Q' or 'Escape' quits """
         if action == glfw.PRESS or action == glfw.REPEAT:
-            if key == glfw.KEY_ESCAPE:
+            if key == glfw.KEY_ESCAPE or key == glfw.KEY_Q:
                 glfw.set_window_should_close(self.win, True)
-            if key == glfw.KEY_O:
+            if key == glfw.KEY_W:
                 GL.glPolygonMode(GL.GL_FRONT_AND_BACK, next(self.fill_modes))
             if key == glfw.KEY_SPACE:
                 glfw.set_time(0)
-            if key == glfw.KEY_W:
-                self.pos += np.array([0,0,self.mov_speed], dtype=np.float32)
-            if key == glfw.KEY_S:
-                self.pos -= np.array([0,0,self.mov_speed], dtype=np.float32)
-            if key == glfw.KEY_D:
-                self.pos -= np.array([self.mov_speed,0,0], dtype=np.float32)
-            if key == glfw.KEY_A:
-                self.pos += np.array([self.mov_speed,0,0], dtype=np.float32)
-            if key == glfw.KEY_Q:
-                self.pos -= np.array([0,self.mov_speed,0], dtype=np.float32)
-            if key == glfw.KEY_Z:
-                self.pos += np.array([0,self.mov_speed,0], dtype=np.float32)
 
 class Trex(Node):
     """ Very simple tyranosaurus based on the natural selection and lots of slow prey"""
@@ -1191,47 +1122,52 @@ def main():
 
     #viewer.add(cylinder_node)
     #viewer.add(TexturedPlane('grass_green.png'))
-    size, step = 200, 25
-    [vertices, normals], faces = generate_perlin_grid(size, step=step)
-    for i,x in enumerate(normals):
-        normals[i] = -1*x
+    #size, step = 200, 25
+    #[vertices, normals], faces = generate_perlin_grid(size, step=step)
+    #for i,x in enumerate(normals):
+    #    normals[i] = -1*x
 
-    tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
-    for i in range(len(tex_uv)):
-        tex_uv[i][0] = (i // (size + 1))/(size + 1)
-        tex_uv[i][1] = (i % (size + 1))/(size + 1)
+    #tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
+    #for i in range(len(tex_uv)):
+    #    tex_uv[i][0] = (i // (size + 1))/(size + 1)
+    #    tex_uv[i][1] = (i % (size + 1))/(size + 1)
 
-    # THIS IS STUPID REMOVE IT LATER
-    for x in vertices:
-        x[1], x[2] = x[2], x[1]
-    for x in normals:
-        x[1], x[2] = x[2], x[1]
+    ## THIS IS STUPID REMOVE IT LATER
+    #for x in vertices:
+    #    x[1], x[2] = x[2], x[1]
+    #for x in normals:
+    #    x[1], x[2] = x[2], x[1]
 
 
-    tree_bases = []
-    for i, x in enumerate(normals):
-        #print(x[1])
-        if abs(x[1]) > 0.96:
-            p = i // (size + 1)
-            q = i % (size + 1)
-            tree_bases.append((p, vertices[i][1], q))
-    number_trees = len(tree_bases)
-    print("nb_trees: ", number_trees)
-    if number_trees > 20:
-        #tree_bases = tree_bases[:20]
-        tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//500)]
-    #viewer.add(TexturedPlane('grass.png'))
+    #tree_bases = []
+    #for i, x in enumerate(normals):
+    #    #print(x[1])
+    #    if abs(x[1]) > 0.96:
+    #        p = i // (size + 1)
+    #        q = i % (size + 1)
+    #        tree_bases.append((p, vertices[i][1], q))
+    #number_trees = len(tree_bases)
+    #print("nb_trees: ", number_trees)
+    #if number_trees > 20:
+    #    #tree_bases = tree_bases[:20]
+    #    tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//150)]
+    ##viewer.add(TexturedPlane('grass.png'))
 
-    #trees = load_textured_n_instances("Tree/Tree.obj", 25)
-    print("Loading %d instances if Tree" % len(tree_bases))
-    trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
-    for t in trees:
-        t.positions = tree_bases
-        viewer.add(t)
-    #tree1, tree2 = load_textured2("Tree/Tree.obj")
-    #tree2 = load_textured("Tree/Tree.obj")
-    viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
-            #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
+    tree = load_textured("Tree/Tree.obj")
+    viewer.add(*tree)
+
+    ##trees = load_textured_n_instances("Tree/Tree.obj", 25)
+    #trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
+    ##tree1, tree2 = load_textured2("Tree/Tree.obj")
+    ##tree2 = load_textured("Tree/Tree.obj")
+    #viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
+    #for i, tree in  enumerate(trees):
+    #    for m in tree:
+    #        #m.transform = identity()
+    #        #m.transform = translate(3*(i//5), 0, 3*(i%5))
+    #        m.transform = translate(*(tree_bases[i]))
+    #    viewer.add(*tree)
+    #        #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
     #for m in tree2:
     #    m.transform = translate(1,1,1)
@@ -1239,7 +1175,7 @@ def main():
     #viewer.add(*tree2)
 
     #if len(sys.argv) < 2:
-    if False:
+    if False: 
         print('Usage:\n\t%s [3dfile]*\n\n3dfile\t\t the filename of a model in'
               ' format supported by pyassimp.' % (sys.argv[0],))
 

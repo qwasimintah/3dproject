@@ -6,6 +6,7 @@ Python OpenGL practical application.
 import os                           # os function, i.e. checking file status
 from itertools import cycle
 import sys
+from bisect import bisect_left      # search sorted keyframe lists
 
 # External, non built-in modules
 import OpenGL.GL as GL              # standard Python OpenGL wrapper
@@ -13,10 +14,12 @@ import glfw                         # lean window system wrapper for OpenGL
 import numpy as np                  # all matrix manipulations & OpenGL args
 import pyassimp                     # 3D ressource loader
 import pyassimp.errors              # assimp error management + exceptions
-from transform import translate, rotate, scale, vec, identity, lerp, normalized
+from transform import translate, rotate, scale, vec, identity, lerp, normalized, vec
 #from h_loader import *
 from transform import Trackball, identity
 #from grid_normals import generate_grid, generate_perlin_grid 
+from transform import (lerp, quaternion_slerp, quaternion_matrix, quaternion,
+                       quaternion_from_euler)
 from grid_texture import generate_perlin_grid
 from PIL import Image               # load images for textures
 import copy
@@ -219,7 +222,8 @@ class Node:
         """ Recursive draw, passing down named parameters & model matrix. """
         # merge named parameters given at initialization with those given here
         param = dict(param, **self.param)
-        model = self.transform @ model
+        #model = self.transform @ model
+        model = model @ self.transform
         for child in self.children:
             child.draw(projection, view, model, **param)
 
@@ -267,6 +271,12 @@ class TransformKeyFrames:
         rotate_matrix = quaternion_matrix(self.rotate_keys.value(time))
         return translate_matrix @ rotate_matrix @ scale_matrix
 
+    def last_frame(self):
+        tlast = self.translate_keys.times[-1]
+        slast = self.scale_keys.times[-1]
+        rlast = self.rotate_keys.times[-1]
+        return max(tlast, slast, rlast)
+
 
 class KeyFrameControlNode(Node):
     """ Place node with transform keys above a controlled subtree """
@@ -296,17 +306,25 @@ uniform mat4 boneMatrix[MAX_BONES];
 
 // ---- vertex attributes
 layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 color;
-layout(location = 2) in vec4 bone_ids;
-layout(location = 3) in vec4 bone_weights;
+layout(location = 1) in vec2 tex;
+//layout(location = 2) in vec3 color;
+layout(location = 2) in vec3 normal;
+layout(location = 3) in vec4 bone_ids;
+layout(location = 4) in vec4 bone_weights;
+
+uniform vec3 light;
+out vec3 nout;
+out vec3 l;
+uniform vec3 ks;
+out vec3 ks_out;
 
 // ----- interpolated attribute variables to be passed to fragment shader
-out vec3 fragColor;
+//out vec3 fragColor;
+out vec2 fragTexCoord;
 
 void main() {
 
     // ------ creation of the skinning deformation matrix
-    //mat4 skinMatrix = mat4(1.);  // TODO complete shader here for exercise 1!
 
     mat4 skinMatrix = mat4(0.);
     int i;
@@ -315,8 +333,6 @@ void main() {
         s = s + bone_weights[i];
     }
     for(i=0; i < MAX_VERTEX_BONES; i++){
-        //skinMatrix = skinMatrix + bone_weights[int(bone_ids[i])]*boneMatrix[int(bone_ids[i])];
-        //skinMatrix = skinMatrix + bone_weights[int(bone_ids[i])]*boneMatrix[int(bone_ids[i])];
         skinMatrix = skinMatrix + bone_weights[i]*boneMatrix[int(bone_ids[i])];
     }
 
@@ -324,29 +340,38 @@ void main() {
     vec4 wPosition4 = (1./s) * skinMatrix * vec4(position, 1.0);
     gl_Position = projection * view * wPosition4;
 
-    fragColor = color;
+    l = normalize(light);
+    nout = normal;
+    ks_out = ks;
+    fragTexCoord = tex;
+
+    //fragColor = color;
 }
 """ % (MAX_VERTEX_BONES, MAX_BONES)
 
-
 class SkinnedMesh:
     """class of skinned mesh nodes in scene graph """
-    def __init__(self, attributes, bone_nodes, bone_offsets, index=None):
+    def __init__(self, texture, attributes, bone_nodes, bone_offsets, index=None):
 
         # setup shader attributes for linear blend skinning shader
         self.vertex_array = VertexArray(attributes, index)
 
         # feel free to move this up in Viewer as shown in previous practicals
-        self.skinning_shader = Shader(SKINNING_VERT, COLOR_FRAG)
+        #self.skinning_shader = Shader(SKINNING_VERT, COLOR_FRAG)
+        #self.skinning_shader = Shader(SKINNING_VERT, TEXTURE_FRAG)
+        self.shader = Shader(SKINNING_VERT, TEXTURE_FRAG)
 
         # store skinning data
         self.bone_nodes = bone_nodes
         self.bone_offsets = bone_offsets
 
+        self.texture = texture
+
     def draw(self, projection, view, _model, **_kwargs):
         """ skinning object draw method """
 
-        shid = self.skinning_shader.glid
+        #shid = self.skinning_shader.glid
+        shid = self.shader.glid
         GL.glUseProgram(shid)
 
         # setup camera geometry parameters
@@ -354,6 +379,19 @@ class SkinnedMesh:
         GL.glUniformMatrix4fv(loc, 1, True, projection)
         loc = GL.glGetUniformLocation(shid, 'view')
         GL.glUniformMatrix4fv(loc, 1, True, view)
+
+        # projection geometry
+        ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
+        GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
+
+        t = glfw.get_time()
+        l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
+        GL.glUniform3fv(l_location, 1, (math.cos(t), math.sin(t), 0))
+
+        loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture.glid)
+        GL.glUniform1i(loc, 0)
 
         # bone world transform matrices need to be passed for skinning
         for bone_id, node in enumerate(self.bone_nodes):
@@ -366,21 +404,37 @@ class SkinnedMesh:
         self.vertex_array.draw(GL.GL_TRIANGLES)
 
         # leave with clean OpenGL state, to make it easier to detect problems
+        GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         GL.glUseProgram(0)
-
 
 # -------- Skinning Control for Keyframing Skinning Mesh Bone Transforms ------
 class SkinningControlNode(Node):
     """ Place node with transform keys above a controlled subtree """
     def __init__(self, *keys, **kwargs):
         super().__init__(**kwargs)
+        #print("KEYS : ", keys)
         self.keyframes = TransformKeyFrames(*keys) if keys[0] else None
+        if self.keyframes is not None:
+            print("Non null kfs : ", self)
+        else:
+            print("    null kfs : ", self)
         self.world_transform = identity()
+        self.time = 0
+        self.orientation = 0 # TODO: think of something better
 
     def draw(self, projection, view, model, **param):
         """ When redraw requested, interpolate our node transform from keys """
         if self.keyframes:  # no keyframe update should happens if no keyframes
-            self.transform = self.keyframes.value(glfw.get_time())
+            #self.transform = self.keyframes.value(glfw.get_time())
+            self.transform = self.keyframes.value(self.time)
+            # TODO: Define FPS
+            #self.set_time_all(0.5, add=True)
+            #self.time += 0.5
+            #print("children : ", children)
+            #for c in self.children:
+            #    if isinstance(c, SkinningControlNode):
+            #        c.time += 0.5
+
 
         # store world transform for skinned meshes using this node as bone
         self.world_transform = model @ self.transform
@@ -388,81 +442,29 @@ class SkinningControlNode(Node):
         # default node behaviour (call children's draw method)
         super().draw(projection, view, model, **param)
 
+    def add_translation(self, trans):
+        if self.keyframes is None:
+            return
+        t = self.keyframes.last_frame()
+        if self.keyframes.translate_keys.times[t] is None:
+            self.keyframes.translate_keys.times[t] = trans
+            print("defined translation")
+        else:
+            self.keyframes.translate_keys.times[t] += trans
+            print("added translation")
 
-# -------------- Deformable Cylinder Mesh  ------------------------------------
-class SkinnedCylinder(SkinningControlNode):
-    """ Deformable cylinder """
-    def __init__(self, sections=11, quarters=20, **params):
+    def set_time(self, value):
+        self.time = value
 
-        # this "arm" node and its transform serves as control node for bone 0
-        # we give it the default identity keyframe transform, doesn't move
-        super().__init__({0: (0, 0, 0)}, {0: quaternion()}, {0: 1}, **params)
+    def set_time_all(self, value, add=False):
+        if add:
+            self.time += value
+        else:
+            self.time = value
 
-        # we add a son "forearm" node with animated rotation for the second
-        # part of the cylinder
-        self.add(SkinningControlNode(
-            {0: (0, 0, 0)},
-            {0: quaternion(), 2: quaternion_from_euler(90), 4: quaternion()},
-            {0: 1}))
-
-        # there are two bones in this animation corresponding to above noes
-        bone_nodes = [self, self.children[0]]
-
-        # these bones have no particular offset transform
-        bone_offsets = [identity(), identity()]
-
-        # vertices, per vertex bone_ids and weights
-        vertices, faces, bone_id, bone_weights = [], [], [], []
-        for x_c in range(sections+1):
-            for angle in range(quarters):
-                # compute vertex coordinates sampled on a cylinder
-                z_c, y_c = sincos(360 * angle / quarters)
-                vertices.append((x_c - sections/2, y_c, z_c))
-
-                # the index of the 4 prominent bones influencing this vertex.
-                # since in this example there are only 2 bones, every vertex
-                # is influenced by the two only bones 0 and 1
-                bone_id.append((0, 1, 0, 0))
-
-                # per-vertex weights for the 4 most influential bones given in
-                # a vec4 vertex attribute. Not using indices 2 & 3 => 0 weight
-                # vertex weight is currently a hard transition in the middle
-                # of the cylinder
-                # TODO: modify weights here for TP7 exercise 2
-                #weight = 1 if x_c <= sections/2 else 0
-                #if x_c <= sections/4:
-                #    weight = 1
-                #elif x_c >= 3*sections/4:
-                #    weight = 0
-                #else:
-                #    weight = lerp(3*sections/4, sections/4, 2*x_c/sections)
-
-                #weight = lerp(1, 0, x_c/sections)
-
-                weight = 1/(1 + 2*(-(x_c- sections)/sections))
-
-
-                bone_weights.append((weight, 1 - weight, 0, 0))
-
-        # face indices
-        faces = []
-        for x_c in range(sections):
-            for angle in range(quarters):
-
-                # indices of the 4 vertices of the current quad, % helps
-                # wrapping to finish the circle sections
-                ir0c0 = x_c * quarters + angle
-                ir1c0 = (x_c + 1) * quarters + angle
-                ir0c1 = x_c * quarters + (angle + 1) % quarters
-                ir1c1 = (x_c + 1) * quarters + (angle + 1) % quarters
-
-                # add the 2 corresponding triangles per quad on the cylinder
-                faces.extend([(ir0c0, ir0c1, ir1c1), (ir0c0, ir1c1, ir1c0)])
-
-        # the skinned mesh itself. it doesn't matter where in the hierarchy
-        # this is added as long as it has the proper bone_node table
-        self.add(SkinnedMesh([vertices, bone_weights, bone_id, bone_weights],
-                             bone_nodes, bone_offsets, faces))
+        for c in self.children:
+            if isinstance(c, SkinningControlNode):
+                c.set_time_all(value, add)
 
 
 # -------------- 3D resource loader -------------------------------------------
@@ -511,6 +513,23 @@ def load_skinned(file):
 
     root_node = make_nodes(scene.rootnode)
 
+    path = os.path.dirname(file)
+    for mat in scene.materials:
+        mat.tokens = dict(reversed(list(mat.properties.items())))
+        if 'file' in mat.tokens:  # texture file token
+            print("file in math tokens")
+            tname = mat.tokens['file'].split('/')[-1].split('\\')[-1]
+            # search texture in file's whole subdir since path often screwed up
+            tname = [os.path.join(d[0], f) for d in os.walk(path) for f in d[2]
+                     if tname.startswith(f) or f.startswith(tname)]
+            print(tname)
+            if tname:
+                print("tname = %s found" % tname[0])
+                mat.texture = Texture(tname[0])
+            else:
+                print('Failed to find texture:', tname)
+
+
     # ---- create SkinnedMesh objects
     for mesh in scene.meshes:
         # -- skinned mesh: weights given per bone => convert per vertex for GPU
@@ -528,9 +547,29 @@ def load_skinned(file):
         bone_nodes = [nodes[bone.name][0] for bone in mesh.bones]
         bone_offsets = [bone.offsetmatrix for bone in mesh.bones]
 
+        # python, can I please load some textures as well, please?
+        print("mat index : ", mesh.materialindex, "all: ", [mesh.materialindex for mesh in scene.meshes])
+        print("nb mats ", len(scene.materials), "mats : ", scene.materials)
+        #texture = scene.materials[mesh.materialindex].texture
+
+        # for dinosaurs (retarded indices)
+        #texture = scene.materials[int(mesh.materialindex/2)].texture
+        if mesh.materialindex == 2:
+            texture = scene.materials[2].texture
+        if mesh.materialindex == 1:
+            texture = scene.materials[1].texture
+
+        tex_uv = ((0, 1) + mesh.texturecoords[0][:, :2] * (1, -1)
+                  if mesh.texturecoords.size else None)
+        ##meshes.append(TexturedMesh(texture, [mesh.vertices, tex_uv, mesh.normals], mesh.faces))
+
         # initialize skinned mesh and store in pyassimp_mesh for node addition
-        mesh.skinned_mesh = SkinnedMesh(
-                [mesh.vertices, mesh.normals, v_bone['id'], v_bone['weight']],
+        ##mesh.skinned_mesh = SkinnedMesh(
+        ##        [mesh.vertices, mesh.normals, v_bone['id'], v_bone['weight']],
+        ##        bone_nodes, bone_offsets, mesh.faces
+        ##)
+        mesh.skinned_mesh = SkinnedMesh(texture,
+                [mesh.vertices, tex_uv, mesh.normals, v_bone['id'], v_bone['weight']],
                 bone_nodes, bone_offsets, mesh.faces
         )
 
@@ -543,7 +582,6 @@ def load_skinned(file):
           (len(scene.meshes), nb_triangles, len(nodes), len(scene.animations)))
     pyassimp.release(scene)
     return [root_node]
-
 # ----------------Probably-useless--------------------------------------------
 class ColorMesh:
 
@@ -594,23 +632,6 @@ class Texture:
 
 
 # -------------- Example texture plane class ----------------------------------
-#TEXTURE_VERT = """#version 330 core
-#uniform mat4 modelviewprojection;
-#layout(location = 0) in vec3 position;
-#out vec2 fragTexCoord;
-#void main() {
-#    gl_Position = modelviewprojection * vec4(position, 1);
-#    fragTexCoord = position.xy;
-#}"""
-#
-#TEXTURE_FRAG = """#version 330 core
-#uniform sampler2D diffuseMap;
-#in vec2 fragTexCoord;
-#out vec4 outColor;
-#void main() {
-#    outColor = texture(diffuseMap, fragTexCoord);
-#}"""
-
 TEXTURE_VERT = """#version 330 core
 
 
@@ -828,92 +849,6 @@ class TexturedMeshInst:
         GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         GL.glUseProgram(0)
 
-
-
-class TexturedPlane:
-    """ Simple first textured object """
-
-    def __init__(self, file, size=200, step=25):
-        # feel free to move this up in the viewer as per other practicals
-        self.shader = Shader(TEXTURE_VERT, TEXTURE_FRAG)
-
-        [vertices, normals], faces = generate_perlin_grid(size, step=step)
-        tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
-        for i in range(len(tex_uv)):
-            # remember scale for later
-            tex_uv[i][0] = (i // (size + 1))/(size + 1) # why +3????
-            tex_uv[i][1] = (i % (size + 1))/(size + 1)
-            #tex_uv[i][0] = (i // (size + 3)) # why +3????
-            #tex_uv[i][1] = (i % (size + 3))
-        #randomize_height(vertices)
-        self.vertex_array = VertexArray([vertices, normals, tex_uv], faces)
-
-        # interactive toggles
-        self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
-                           GL.GL_CLAMP_TO_BORDER, GL.GL_CLAMP_TO_EDGE])
-        self.filter = cycle([(GL.GL_NEAREST, GL.GL_NEAREST),
-                             (GL.GL_LINEAR, GL.GL_LINEAR),
-                             (GL.GL_LINEAR, GL.GL_LINEAR_MIPMAP_LINEAR)])
-        self.wrap_mode, self.filter_mode = next(self.wrap), next(self.filter)
-        self.file = file
-
-        # setup texture and upload it to GPU
-        self.texture = Texture(file, self.wrap_mode, *self.filter_mode)
-
-    def draw(self, projection, view, model, win=None, **_kwargs):
-
-        # some interactive elements
-        if win!=None:
-            if glfw.get_key(win, glfw.KEY_F6) == glfw.PRESS:
-                self.wrap_mode = next(self.wrap)
-                self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
-
-            if glfw.get_key(win, glfw.KEY_F7) == glfw.PRESS:
-                self.filter_mode = next(self.filter)
-                self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
-        GL.glUseProgram(self.shader.glid)
-
-        # projection geometry
-        loc = GL.glGetUniformLocation(self.shader.glid, 'modelviewprojection')
-        GL.glUniformMatrix4fv(loc, 1, True, projection @ view @ model)
-
-	# lighting coeffs	
-        ks_location = GL.glGetUniformLocation(self.shader.glid, 'ks')
-        GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
-
-        t = glfw.get_time()
-        l_location = GL.glGetUniformLocation(self.shader.glid, 'light')
-        GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
-        #GL.glUniform3fv(l_location, 1, (0.5, 0, -0.75))
-
-        # texture access setups
-        loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
-        GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture.glid)
-        GL.glUniform1i(loc, 0)
-        #self.vertex_array.draw(projection, view, model, self.shader)
-        self.vertex_array.draw(GL.GL_TRIANGLES)
-
-        # leave clean state for easier debugging
-        GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-        GL.glUseProgram(0)
-
-
-def load(file):
-    """ load resources from file using pyassimp, return list of ColorMesh """
-    try:
-        option = pyassimp.postprocess.aiProcessPreset_TargetRealtime_MaxQuality
-        scene = pyassimp.load(file, option)
-    except pyassimp.errors.AssimpError:
-        print('ERROR: pyassimp unable to load', file)
-        return []  # error reading => return empty list
-
-    meshes = [ColorMesh([m.vertices, m.normals], m.faces) for m in scene.meshes]
-    size = sum((mesh.faces.shape[0] for mesh in scene.meshes))
-    print('Loaded %s\t(%d meshes, %d faces)' % (file, len(scene.meshes), size))
-
-    pyassimp.release(scene)
-    return meshes
 
 
 def load_textured(file):
@@ -1137,9 +1072,13 @@ class Viewer:
             # Poll for and process events
             glfw.poll_events()
 
-    def add(self, *drawables):
+    def add(self, *drawables, controlled=False):
         """ add objects to draw in this window """
         self.drawables.extend(drawables)
+        if controlled:
+            self.controlled = drawables
+            print(self.controlled)
+            print(self.drawables)
 
     #def on_key(self, _win, key, _scancode, action, _mods):
     #    """ 'Q' or 'Escape' quits """
@@ -1168,6 +1107,29 @@ class Viewer:
                 self.pos -= np.array([0,self.mov_speed,0], dtype=np.float32)
             if key == glfw.KEY_Z:
                 self.pos += np.array([0,self.mov_speed,0], dtype=np.float32)
+            if key == glfw.KEY_G:
+                #self.controlled.transform = translate(0,0,0.1) @ self.controlled.transform
+                #self.controlled.keyframes.translate_keys
+                for d in self.controlled:
+                    print(d)
+                    #d.set_time(0)
+                    if d.time > 0.8:
+                        d.set_time_all(0)
+                    #d.set_time_all(0)
+                    #d.transform = translate(0,0,-0.1) @ d.transform
+                    #d.transform = rotate(axis=vec(0,1,0), angle=d.orientation) @ translate(0,0,-0.1) @ d.world_transform
+                    tr = (0,0,-0.1,1)
+                    #d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
+                    d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
+                    d.set_time_all(0.01, True)
+                    #d.add_translation((1,0,0))
+                #glfw.set_time(0)
+            if key == glfw.KEY_R:
+                for d in self.controlled:
+                    pos = d.world_transform[...,3][:3]
+                    d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=1) @ translate(*(-1*pos)) @ d.world_transform
+                    print("pos : ", pos)
+                    d.orientation = (d.orientation + 1) % 360
 
 class Trex(Node):
     """ Very simple tyranosaurus based on the natural selection and lots of slow prey"""
@@ -1231,6 +1193,10 @@ def main():
     #tree1, tree2 = load_textured2("Tree/Tree.obj")
     #tree2 = load_textured("Tree/Tree.obj")
     viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
+    #viewer.add(*load_skinned("dino/Dinosaurus_run.dae"), controlled=True)
+    dino = load_skinned("dino/Dinosaurus_run.dae")
+    viewer.add(*dino, controlled=True)
+    #dino[0].world_transform = translate(0,0,10) @ dino[0].world_transform
             #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
     #for m in tree2:

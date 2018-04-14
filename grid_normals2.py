@@ -5,7 +5,6 @@ from transform import lerp, normalized
 import numpy as np
 import random
 import pickle
-#from gen_texture import generate_texture
 
 def make_vertex(vertices, n, x, y, height, width, centered=False):
     if centered:
@@ -99,43 +98,18 @@ def get_normal(a, b):
     cr = np.cross(a, b)
     return normalized(cr)
 
-def avg_neighbours_grid(array, x, y, height, width, normals_proj):
+def avg_neighbours_grid(array, x, y, height, width):
     neighbours = []
-    #normals_proj = np.zeros(shape(height * width))
-    o = array[x*(width + 1) + y]
-    if x > 0:
-        b = array[(x-1)*(width + 1) + y]
-    if x < height:
-        u = array[(x+1)*(width + 1) + y]
-    if y > 0:
-        l = array[x*(width + 1) + y-1]
-    if y < width:
-        r = array[x*(width + 1) + y+1]
-
     if x > 0:
         if y > 0:
-             neighbours.append(get_normal(l - o, b - o))
+             neighbours.append(get_normal(array[x*(width + 1) + y-1] - array[x*(width + 1) + y], array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y]))  
         if y < width:
-            neighbours.append(get_normal(b - o, r - o))
+            neighbours.append(get_normal(array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y+1] - array[x*(width + 1) + y]))  
     if x < height:
         if y < width:
-            nrm = get_normal(r - o, u - o)
-            neighbours.append(nrm)
-            normals_proj[x*width + y] = abs(nrm[2])
+            neighbours.append(get_normal(array[x*(width + 1) + y+1] - array[x*(width + 1) + y], array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y]))  
         if y > 0:
-            nrm = get_normal(u - o, l - o)
-            neighbours.append(-1*nrm)
-            #normals_proj[x*width + y] = abs(nrm[2])
-#    if x > 0:
-#        if y > 0:
-#             neighbours.append(get_normal(array[x*(width + 1) + y-1] - array[x*(width + 1) + y], array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y]))  
-#        if y < width:
-#            neighbours.append(get_normal(array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y+1] - array[x*(width + 1) + y]))  
-#    if x < height:
-#        if y < width:
-#            neighbours.append(get_normal(array[x*(width + 1) + y+1] - array[x*(width + 1) + y], array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y]))  
-#        if y > 0:
-#            neighbours.append(get_normal(array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y-1] - array[x*(width + 1) + y]))  
+            neighbours.append(get_normal(array[(x+1)*(width + 1) + y] - array[x*(width + 1) + y], array[x*(width + 1) + y-1] - array[x*(width + 1) + y]))  
     res = 0*neighbours[0]
     N = len(neighbours)
     for n in range(len(neighbours)):
@@ -151,16 +125,14 @@ def avg_neighbours_grid(array, x, y, height, width, normals_proj):
 
 def get_normals(vertices, height, width):
     normals = np.zeros(shape=((width + 1)*(height + 1), 3), dtype=float)
-    normals_proj = np.zeros(shape=(height * width))
     for p in range(height + 1):
         for q in range(width + 1):
-            normals[p*(width + 1) + q] = avg_neighbours_grid(vertices, p, q, height, width, normals_proj)
-    return normals, normals_proj
+            normals[p*(width + 1) + q] = avg_neighbours_grid(vertices, p, q, height, width)
+    return normals
 
 def lerp_smooth(a, b, fraction):
     f = lambda t: t * t * t * (t * (t * 6 - 15) + 10)
     return f(1-fraction)*a + f(fraction)*b
-
 
 def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
     if width==None:
@@ -246,7 +218,7 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
         print("Generation with Perlin noise complete")
         #randomize_height(vertices, width, height, sigma=0.15)
         #print("Additional gaussian noise complete")
-        normals, normals_proj = get_normals(vertices, height, width)
+        normals = get_normals(vertices, height, width)
         print("Calculation of normals complete")
 
         #print(len(used_grad))
@@ -257,7 +229,6 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
         #        print(i)
         with open('ground', 'wb') as fp:
             pickle.dump([vertices, normals, faces, normals_proj], fp)
-        generate_texture(normals_proj, height, width)
     
         print("Generation of the ground complete")
     return [vertices, normals], faces

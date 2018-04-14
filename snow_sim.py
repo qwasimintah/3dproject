@@ -22,7 +22,7 @@ from PIL import Image               # load images for textures
 import copy
 
 import math
-
+import random
 
 # ------------ low level OpenGL object wrappers ----------------------------
 class Shader:
@@ -1191,46 +1191,64 @@ def main():
 
     #viewer.add(cylinder_node)
     #viewer.add(TexturedPlane('grass_green.png'))
-    size, step = 200, 25
-    [vertices, normals], faces = generate_perlin_grid(size, step=step)
-    for i,x in enumerate(normals):
-        normals[i] = -1*x
+    # size, step = 200, 25
+    # [vertices, normals], faces = generate_perlin_grid(size, step=step)
+    # for i,x in enumerate(normals):
+    #     normals[i] = -1*x
 
-    tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
-    for i in range(len(tex_uv)):
-        tex_uv[i][0] = (i // (size + 1))/(size + 1)
-        tex_uv[i][1] = (i % (size + 1))/(size + 1)
+    # tex_uv = np.zeros(shape=((size+1)*(size+1), 2))
+    # for i in range(len(tex_uv)):
+    #     tex_uv[i][0] = (i // (size + 1))/(size + 1)
+    #     tex_uv[i][1] = (i % (size + 1))/(size + 1)
 
-    # THIS IS STUPID REMOVE IT LATER
-    for x in vertices:
-        x[1], x[2] = x[2], x[1]
-    for x in normals:
-        x[1], x[2] = x[2], x[1]
+    # # THIS IS STUPID REMOVE IT LATER
+    # for x in vertices:
+    #     x[1], x[2] = x[2], x[1]
+    # for x in normals:
+    #     x[1], x[2] = x[2], x[1]
 
 
-    tree_bases = []
-    for i, x in enumerate(normals):
-        #print(x[1])
-        if abs(x[1]) > 0.96:
-            p = i // (size + 1)
-            q = i % (size + 1)
-            tree_bases.append((p, vertices[i][1], q))
-    number_trees = len(tree_bases)
-    print("nb_trees: ", number_trees)
-    if number_trees > 20:
-        #tree_bases = tree_bases[:20]
-        tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//500)]
-    #viewer.add(TexturedPlane('grass.png'))
+    # tree_bases = []
+    # for i, x in enumerate(normals):
+    #     #print(x[1])
+    #     if abs(x[1]) > 0.96:
+    #         p = i // (size + 1)
+    #         q = i % (size + 1)
+    #         tree_bases.append((p, vertices[i][1], q))
+    # number_trees = len(tree_bases)
+    # print("nb_trees: ", number_trees)
+    # if number_trees > 20:
+    #     #tree_bases = tree_bases[:20]
+    #     tree_bases = [tree_bases[i] for i in range(1, number_trees, number_trees//500)]
+    # #viewer.add(TexturedPlane('grass.png'))
 
-    #trees = load_textured_n_instances("Tree/Tree.obj", 25)
-    print("Loading %d instances if Tree" % len(tree_bases))
-    trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
-    for t in trees:
-        t.positions = tree_bases
-        viewer.add(t)
+    # #trees = load_textured_n_instances("Tree/Tree.obj", 25)
+    # print("Loading %d instances if Tree" % len(tree_bases))
+    # trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
+    trees = load_textured_n_instances("rock.obj", 25)
+    amount = 100
+    radius = 50.
+    offset = 2.5
+    model_array=[]
+
+    for i in range(0, amount):
+        angle = i/amount *360
+        dis = random.random() % 2*offset*100/100-offset
+        x = math.sin(angle) * radius + dis
+        dis = (random.random() % (2 * offset * 100)) / 100. - offset;
+        y = dis * 0.4; # keep height of field smaller compared to width of x and z
+        dis = (random.random() % (int)(2 * offset * 100)) / 100.0 - offset;
+        z = math.cos(angle) * radius + dis;
+        model = [x, y, z]        
+        model_array.append(model)
+
+
+    for i in range(0,99):
+        trees[1].positions = model_array[i] 
+        viewer.add(trees[1])
     #tree1, tree2 = load_textured2("Tree/Tree.obj")
     #tree2 = load_textured("Tree/Tree.obj")
-    viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
+    #viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
             #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
     #for m in tree2:
