@@ -25,6 +25,7 @@ from PIL import Image               # load images for textures
 import copy
 
 import math
+from math import cos, sin, pi
 
 
 # ------------ low level OpenGL object wrappers ----------------------------
@@ -414,10 +415,10 @@ class SkinningControlNode(Node):
         super().__init__(**kwargs)
         #print("KEYS : ", keys)
         self.keyframes = TransformKeyFrames(*keys) if keys[0] else None
-        if self.keyframes is not None:
-            print("Non null kfs : ", self)
-        else:
-            print("    null kfs : ", self)
+        #if self.keyframes is not None:
+        #    print("Non null kfs : ", self)
+        #else:
+        #    print("    null kfs : ", self)
         self.world_transform = identity()
         self.time = 0
         self.orientation = 0 # TODO: think of something better
@@ -437,12 +438,16 @@ class SkinningControlNode(Node):
 
 
         # store world transform for skinned meshes using this node as bone
+        #self.world_transform = rotate(axis=vec(0,1,0), angle=self.orientation) @ model @ self.transform
         self.world_transform = model @ self.transform
+        #if self.orientation != 0:
+        #    print("orient : ", self.orientation)
 
         # default node behaviour (call children's draw method)
         super().draw(projection, view, model, **param)
 
     def add_translation(self, trans):
+        print("add translation called")
         if self.keyframes is None:
             return
         t = self.keyframes.last_frame()
@@ -969,9 +974,21 @@ class Viewer:
     """ GLFW viewer window, with classic initialization & graphics loop """
 
     def __init__(self, width=640, height=480):
+        #self.pos = np.array([0,0,0], dtype=np.float32)
+        #self.defpos = np.array([0,-4,-10], dtype=np.float32) # this is absolute cancer
+        self.dist = 10 # distance from camera to the object
+        #self.pos = np.array([0,-4,-10], dtype=np.float32)
+        #self.opos = np.array([0,-4,-10], dtype=np.float32)
+
         self.pos = np.array([0,0,0], dtype=np.float32)
+        self.camera = np.array([0,-4,-10], dtype=np.float32) # default camera position relative to the focus posisiton
+        self.campos = np.array([0,-4,-10], dtype=np.float32) # current camera position relative to the focus posisiton
+
+        # unused
         self.dir = np.array([0,0,0], dtype=np.float32)
+        self.rotation = identity() # orientation of the view matrix
         self.mov_speed = 0.5
+        self.alpha = 0
 
         # version hints: create GL window with >= OpenGL 3.3 and core profile
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -995,8 +1012,10 @@ class Viewer:
         # initialize GL by setting viewport and default render characteristics
         GL.glClearColor(0.1, 0.1, 0.1, 0.1)
         GL.glEnable(GL.GL_DEPTH_TEST)
-        GL.glEnable(GL.GL_CULL_FACE)
-        #GL.glFrontFace ( GL.GL_CW )
+        #GL.glEnable(GL.GL_CULL_FACE)
+        GL.glFrontFace ( GL.GL_CW )
+        GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);
+        GL. glEnable(GL.GL_BLEND);
 
         #GL.glCullFace( GL.GL_BACK)
         #GL.glDepthFunc(GL.GL_LEQUAL);
@@ -1046,14 +1065,19 @@ class Viewer:
 
             winsize = glfw.get_window_size(self.win)
             #view = translate(0, 5*glfw.get_time(), 0) @ self.trackball.view_matrix()
-            view = self.trackball.view_matrix()
+            #view = self.trackball.view_matrix()
             #self.dir = normalized(self.trackball.view_matrix()[..., 2][:3])
             #print(self.dir)
 
             #self.pos += -1*normalized(view[..., 2][:3])
 
             #self.view = translate(*(-10**normalized(view[..., 3][:3]))) @ view
-            view = translate(*self.pos) @ view
+            #view = translate(*self.pos) @ view
+            #view = self.rotation @ translate(*self.pos) @ view
+            #view = self.rotation @ translate(*self.pos) @ identity()
+            #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*self.pos) @ translate(*self.opos) @ identity()
+            #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos)) @ identity()
+            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos)) @ identity()
             #view = translate(*(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix() 
             #view = translate(*(10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix()
             #view = self.trackball.view_matrix()
@@ -1076,9 +1100,10 @@ class Viewer:
         """ add objects to draw in this window """
         self.drawables.extend(drawables)
         if controlled:
-            self.controlled = drawables
-            print(self.controlled)
-            print(self.drawables)
+            #self.controlled = drawables
+            self.controlled = drawables[0]
+            #print(self.controlled)
+            #print(self.drawables)
 
     #def on_key(self, _win, key, _scancode, action, _mods):
     #    """ 'Q' or 'Escape' quits """
@@ -1091,45 +1116,94 @@ class Viewer:
         if action == glfw.PRESS or action == glfw.REPEAT:
             if key == glfw.KEY_ESCAPE:
                 glfw.set_window_should_close(self.win, True)
-            if key == glfw.KEY_O:
+            if key == glfw.KEY_P:
                 GL.glPolygonMode(GL.GL_FRONT_AND_BACK, next(self.fill_modes))
             if key == glfw.KEY_SPACE:
                 glfw.set_time(0)
-            if key == glfw.KEY_W:
+            if key == glfw.KEY_I:
                 self.pos += np.array([0,0,self.mov_speed], dtype=np.float32)
-            if key == glfw.KEY_S:
+            if key == glfw.KEY_K:
                 self.pos -= np.array([0,0,self.mov_speed], dtype=np.float32)
-            if key == glfw.KEY_D:
+            if key == glfw.KEY_L:
                 self.pos -= np.array([self.mov_speed,0,0], dtype=np.float32)
-            if key == glfw.KEY_A:
+            if key == glfw.KEY_J:
                 self.pos += np.array([self.mov_speed,0,0], dtype=np.float32)
-            if key == glfw.KEY_Q:
+            if key == glfw.KEY_N:
                 self.pos -= np.array([0,self.mov_speed,0], dtype=np.float32)
-            if key == glfw.KEY_Z:
+            if key == glfw.KEY_U:
                 self.pos += np.array([0,self.mov_speed,0], dtype=np.float32)
-            if key == glfw.KEY_G:
+            if key == glfw.KEY_W:
                 #self.controlled.transform = translate(0,0,0.1) @ self.controlled.transform
                 #self.controlled.keyframes.translate_keys
-                for d in self.controlled:
-                    print(d)
-                    #d.set_time(0)
-                    if d.time > 0.8:
-                        d.set_time_all(0)
-                    #d.set_time_all(0)
-                    #d.transform = translate(0,0,-0.1) @ d.transform
-                    #d.transform = rotate(axis=vec(0,1,0), angle=d.orientation) @ translate(0,0,-0.1) @ d.world_transform
-                    tr = (0,0,-0.1,1)
-                    #d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
-                    d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
-                    d.set_time_all(0.01, True)
-                    #d.add_translation((1,0,0))
-                #glfw.set_time(0)
-            if key == glfw.KEY_R:
-                for d in self.controlled:
-                    pos = d.world_transform[...,3][:3]
-                    d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=1) @ translate(*(-1*pos)) @ d.world_transform
-                    print("pos : ", pos)
-                    d.orientation = (d.orientation + 1) % 360
+
+                d = self.controlled
+
+                tr = (0,0,-0.1,1)
+                self.pos -= (rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]
+
+                if d.time > 0.8:
+                    d.set_time_all(0)
+                d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
+                d.set_time_all(0.03, True)
+
+
+                ##self.defpos -= tr[:3]
+                #for d in self.controlled:
+                #    #print(d)
+                #    #d.set_time(0)
+                #    if d.time > 0.8:
+                #        d.set_time_all(0)
+                #    #d.set_time_all(0)
+                #    #d.transform = translate(0,0,-0.1) @ d.transform
+                #    #d.transform = rotate(axis=vec(0,1,0), angle=d.orientation) @ translate(0,0,-0.1) @ d.world_transform
+                #    #d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
+                #    d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
+                #    d.set_time_all(0.01, True)
+                #    #d.add_translation((1,0,0))
+                ##glfw.set_time(0)
+
+            if key == glfw.KEY_A:
+                d = self.controlled
+                pos = d.world_transform[...,3][:3]
+                #d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=-1) @ translate(*(-1*pos)) @ d.world_transform
+                d.orientation = (d.orientation + 1) % 360
+                d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=1) @ translate(*(-1*pos)) @ d.world_transform
+                #d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=d.orientation) @ translate(*(-1*pos)) @ d.world_transform
+
+                self.alpha -= 1
+                alpha = self.alpha * pi/180.0
+                self.campos = self.camera + (self.dist * sin(alpha), 0, self.dist * (1-cos(alpha)) )
+
+            if key == glfw.KEY_D:
+                d = self.controlled
+                pos = d.world_transform[...,3][:3]
+                #d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=1) @ translate(*(-1*pos)) @ d.world_transform
+                d.orientation = (d.orientation - 1) % 360
+                d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=-1) @ translate(*(-1*pos)) @ d.world_transform
+
+                #for d in self.controlled:
+                #    pos = d.world_transform[...,3][:3]
+                #    d.transform = translate(*pos) @ rotate(axis=vec(0,1,0), angle=1) @ translate(*(-1*pos)) @ d.world_transform
+                #    #print("pos : ", pos)
+                #    d.orientation = (d.orientation + 1) % 360
+
+                self.alpha += 1
+                alpha = self.alpha * pi/180.0
+                self.campos = self.camera + (self.dist * sin(alpha), 0, self.dist * (1-cos(alpha)) )
+                #print("orient : ", d.orientation)
+                #print("alpha : ", self.alpha)
+
+            if key == glfw.KEY_E:
+                self.alpha -= 1
+                #self.rotation =  rotate(axis=vec(0,1,0), angle=self.alpha) @ self.rotation
+                alpha = self.alpha * pi/180.0
+                #self.pos = self.defpos + (self.dist * sin(alpha), 0, self.dist * (1-cos(alpha)) )
+                self.campos = self.camera + (self.dist * sin(alpha), 0, self.dist * (1-cos(alpha)) )
+            if key == glfw.KEY_Q:
+                self.alpha += 1
+                #self.rotation =  rotate(axis=vec(0,1,0), angle=self.alpha) @ self.rotation
+                alpha = self.alpha * pi/180.0
+                self.campos = self.camera + (self.dist * sin(alpha), 0, self.dist * (1-cos(alpha)) )
 
 class Trex(Node):
     """ Very simple tyranosaurus based on the natural selection and lots of slow prey"""
