@@ -228,6 +228,12 @@ class Node:
         for child in self.children:
             child.draw(projection, view, model, **param)
 
+    #def get_bounds(self):
+    #    if isinstance(self, Node):
+    #        return [max(self.children, key=lambda x:x.get_bounds[i]) for i in range(3)]
+    #    else:
+    #        self.vertex_array
+
 # -------------- Keyframing Utilities TP6 ------------------------------------
 class KeyFrames:
     """ Stores keyframe pairs for any value type with interpolation_function"""
@@ -854,7 +860,32 @@ class TexturedMeshInst:
         GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         GL.glUseProgram(0)
 
-
+#-----------------------------------------------------------------------------
+def get_elevation(ground, size, x, y):
+    # approxiamtion
+    xl = int(x)
+    yl = int(y)
+    xu = int(x) + 1
+    yu = int(y) + 1
+    try:
+        if xu - x > y - yl:
+            a1 = ground[xl*size + yl][1]
+            a2 = ground[xu*size + yl][1]
+            a3 = ground[xl*size + yu][1]
+            w2 = x - xl
+            w3 = yu - y
+            w1 = 1 - w2 - w3
+        else:
+            a1 = ground[xu*size + yu][1]
+            a2 = ground[xl*size + yu][1]
+            a3 = ground[xu*size + yl][1]
+            w2 = xu - x
+            w3 = y - yl
+            w1 = 1 - w2 - w3
+        return w1*a1 + w2*a2 + w3*a3
+    except IndexError:
+        return 0
+#-----------------------------------------------------------------------------
 
 def load_textured(file):
     """ load resources using pyassimp, return list of TexturedMeshes """
@@ -980,7 +1011,7 @@ class Viewer:
         #self.pos = np.array([0,-4,-10], dtype=np.float32)
         #self.opos = np.array([0,-4,-10], dtype=np.float32)
 
-        self.pos = np.array([0,0,0], dtype=np.float32)
+        self.pos = np.array([0,0,0], dtype=np.float32) # position of the camera's focus
         self.camera = np.array([0,-4,-10], dtype=np.float32) # default camera position relative to the focus posisiton
         self.campos = np.array([0,-4,-10], dtype=np.float32) # current camera position relative to the focus posisiton
 
@@ -1077,7 +1108,10 @@ class Viewer:
             #view = self.rotation @ translate(*self.pos) @ identity()
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*self.pos) @ translate(*self.opos) @ identity()
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos)) @ identity()
-            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos)) @ identity()
+            #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos)) @ identity()
+            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos))
+            # delme
+            self.view = view
             #view = translate(*(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix() 
             #view = translate(*(10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix()
             #view = self.trackball.view_matrix()
@@ -1102,6 +1136,8 @@ class Viewer:
         if controlled:
             #self.controlled = drawables
             self.controlled = drawables[0]
+            self.pos = -1*self.controlled.transform[..., 3][:3]
+            print("position of camera : ", self.pos)
             #print(self.controlled)
             #print(self.drawables)
 
@@ -1114,12 +1150,17 @@ class Viewer:
     def on_key(self, _win, key, _scancode, action, _mods):
         """ 'Q' or 'Escape' quits """
         if action == glfw.PRESS or action == glfw.REPEAT:
+            if key == glfw.KEY_T:
+                print(glfw.get_time)
+                print("viewer.pos : ", self.pos)
+                print("view : ", self.view)
             if key == glfw.KEY_ESCAPE:
                 glfw.set_window_should_close(self.win, True)
             if key == glfw.KEY_P:
                 GL.glPolygonMode(GL.GL_FRONT_AND_BACK, next(self.fill_modes))
             if key == glfw.KEY_SPACE:
                 glfw.set_time(0)
+
             if key == glfw.KEY_I:
                 self.pos += np.array([0,0,self.mov_speed], dtype=np.float32)
             if key == glfw.KEY_K:
@@ -1143,7 +1184,19 @@ class Viewer:
 
                 if d.time > 0.8:
                     d.set_time_all(0)
-                d.transform = translate((rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]) @ d.world_transform
+
+                trd = (rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]
+                cur_pos = d.world_transform[...,3][:3]
+                new_pos = cur_pos + trd
+
+                #newz = get_elevation(self.ground, 101, new_pos[0], new_pos[2])
+                print("size of ground : ", len(self.ground))
+                print("pos :", cur_pos)
+                newz = get_elevation(self.ground, self.ground_size, new_pos[0], new_pos[2])
+                trd[1] = newz - cur_pos[1]
+                self.pos[1] -= trd[1]
+
+                d.transform =  translate(*trd) @ d.world_transform
                 d.set_time_all(0.03, True)
 
 
@@ -1238,10 +1291,13 @@ def main():
         tex_uv[i][1] = (i % (size + 1))/(size + 1)
 
     # THIS IS STUPID REMOVE IT LATER
-    for x in vertices:
-        x[1], x[2] = x[2], x[1]
-    for x in normals:
-        x[1], x[2] = x[2], x[1]
+    #for x in vertices:
+    #    x[1], x[2] = x[2], x[1]
+    #for x in normals:
+    #    x[1], x[2] = x[2], x[1]
+
+    viewer.ground = vertices
+    viewer.ground_size = size + 1
 
 
     tree_bases = []
@@ -1269,8 +1325,14 @@ def main():
     viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
     #viewer.add(*load_skinned("dino/Dinosaurus_run.dae"), controlled=True)
     dino = load_skinned("dino/Dinosaurus_run.dae")
+    dino[0].world_transform = translate(0,0,10) @ dino[0].world_transform
+    #spawn_dino = vertices[int(size/2) * size + int(size/2)]
+    #spawn_dino = vertices[int(size*size/2)]
+    spawn_dino = vertices[int(size/2)*(size+1)+int(size/2)]
+    print(len(vertices))
+    print("spawned the dinosaur at ", spawn_dino)
+    dino[0].transform = translate(*spawn_dino) @ dino[0].transform
     viewer.add(*dino, controlled=True)
-    #dino[0].world_transform = translate(0,0,10) @ dino[0].world_transform
             #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
     #for m in tree2:

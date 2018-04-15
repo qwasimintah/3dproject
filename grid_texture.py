@@ -5,15 +5,15 @@ from transform import lerp, normalized
 import numpy as np
 import random
 import pickle
-#from gen_texture import generate_texture
+from gen_texture import generate_texture
 
 def make_vertex(vertices, n, x, y, height, width, centered=False):
     if centered:
         vertices[n][0] = x - (height + 1)/2
-        vertices[n][1] = y - (width + 1)/2
+        vertices[n][2] = y - (width + 1)/2
     else:
         vertices[n][0] = x
-        vertices[n][1] = y
+        vertices[n][2] = y
 
 def generate_grid(height, width=None, scale=1, centered=False):
     if width==None:
@@ -45,7 +45,7 @@ def generate_grid(height, width=None, scale=1, centered=False):
 def randomize_height(height_map, width, height, sigma=0.5):
     for p in range(height + 1):
         for q in range(width + 1):
-            height_map[p*(width+1) + q][2]+=random.gauss(0, sigma)
+            height_map[p*(width+1) + q][1]+=random.gauss(0, sigma)
 
 defined_grad = []
 used_grad = []
@@ -121,11 +121,11 @@ def avg_neighbours_grid(array, x, y, height, width, normals_proj):
         if y < width:
             nrm = get_normal(r - o, u - o)
             neighbours.append(nrm)
-            normals_proj[x*width + y] = abs(nrm[2])
+            normals_proj[x*width + y] = abs(nrm[1])
         if y > 0:
             nrm = get_normal(u - o, l - o)
-            neighbours.append(-1*nrm)
-            #normals_proj[x*width + y] = abs(nrm[2])
+            neighbours.append(nrm)
+            #normals_proj[x*width + y] = abs(nrm[1])
 #    if x > 0:
 #        if y > 0:
 #             neighbours.append(get_normal(array[x*(width + 1) + y-1] - array[x*(width + 1) + y], array[(x-1)*(width + 1) + y] - array[x*(width + 1) + y]))  
@@ -144,8 +144,8 @@ def avg_neighbours_grid(array, x, y, height, width, normals_proj):
     norm = math.sqrt(sum(res*res))
     if norm < 0.1:
         res[0] = 0
-        res[1] = 0
-        res[2] = -1
+        res[1] = 1
+        res[2] = 0
     return normalized(res)
 
 
@@ -192,7 +192,7 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
                     value = lerp_smooth(ix0, ix1, sq/step)
                     #value = lerp_smooth(ix0, ix1, sq)
 
-                    vertices[p*(width + 1) + q][2] = value
+                    vertices[p*(width + 1) + q][1] = value
 
         # 2
         step = step // 2 + 1
@@ -216,7 +216,7 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
                     value = lerp_smooth(ix0, ix1, sq/step)
                     #value = lerp_smooth(ix0, ix1, sq)
 
-                    vertices[p*(width + 1) + q][2] += 0.5 * value
+                    vertices[p*(width + 1) + q][1] += 0.5 * value
         # 3
         step = step // 2 + 1
         gradient = randomize_gradient(width + step, height + step, step)
@@ -239,10 +239,10 @@ def generate_perlin_grid(height, width=None, step=25, scale=1, centered=False):
                     value = lerp_smooth(ix0, ix1, sq/step)
                     #value = lerp_smooth(ix0, ix1, sq)
 
-                    vertices[p*(width + 1) + q][2] += 0.3 * value
+                    vertices[p*(width + 1) + q][1] += 0.2 * value
 
 
-        print([z[2] for z in vertices])
+        print([z[1] for z in vertices])
         print("Generation with Perlin noise complete")
         #randomize_height(vertices, width, height, sigma=0.15)
         #print("Additional gaussian noise complete")
