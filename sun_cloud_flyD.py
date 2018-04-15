@@ -573,45 +573,45 @@ def main():
     """
         Cloud
     """
-    sphere_level3_1 = Node(transform=translate(100, -50, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.5, .5, .5), children=[sphere])
-    sphere_level3_2 = Node(transform=translate(100, 50, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.4, .6, 1), children=[sphere])
-    sphere_level3_3 = Node(transform=translate(50, 100, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.21, .25, .3), children=[sphere])
+    sphere_level3_1 = Node(transform=translate(100, -50, 0) @ rotate(axis=vec(1, 0, 0), angle=0, radians=None) @ scale(vec(.5, .5, .5)), children=[sphere])
+    sphere_level3_2 = Node(transform=translate(100, 50, 0) @ rotate(axis=(vec(1, 0, 0)), angle=0, radians=None) @ scale(vec(.4, .6, 1)), children=[sphere])
+    sphere_level3_3 = Node(transform=translate(50, 100, 0) @ rotate(axis=(vec(1, 0, 0)), angle=0, radians=None) @ scale(vec(.21, .25, .3)), children=[sphere])
     
-    sphere_level2_1 = Node(transform=translate(100, 0, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.7, .7, .7), children=[sphere])
+    sphere_level2_1 = Node(transform=translate(vec(100, 0, 0)) @ rotate(axis=(vec(1, 0, 0)), angle=0, radians=None) @ scale(vec(.7, .7, .7)), children=[sphere])
     sphere_level2_1.add(sphere_level3_1)
     sphere_level2_1.add(sphere_level3_2)
     sphere_level2_1.add(sphere_level3_3)
 
-    sphere_level2_2 = Node(transform=translate(0, 100, 0) @ rotate(axis=(0, 1, 0), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
+    sphere_level2_2 = Node(transform=translate(0, 100, 0) @ rotate(axis=(vec(0, 1, 0)), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
     sphere_level2_2.add(sphere_level3_1)
     sphere_level2_2.add(sphere_level3_2)
     sphere_level2_2.add(sphere_level3_3)
 
-    sphere_level2_3 = Node(transform=translate(0, -10, 100) @ rotate(axis=(0, 0, 1), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
+    sphere_level2_3 = Node(transform=translate(0, -10, 100) @ rotate(axis=(vec(0, 0, 1)), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
     sphere_level2_3.add(sphere_level3_1)
     sphere_level2_3.add(sphere_level3_2)
     sphere_level2_3.add(sphere_level3_3)
 
-    sphere_level2_4 = Node(transform=translate(0, -10, -100) @ rotate(axis=(0, 1, 1), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
+    sphere_level2_4 = Node(transform=translate(0, -10, -100) @ rotate(axis=(vec(0, 1, 1)), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
     sphere_level2_4.add(sphere_level3_1)
     sphere_level2_4.add(sphere_level3_2)
     sphere_level2_4.add(sphere_level3_3)
 
 
 
-    sphere_level1_1 = Node(transform=translate(1, 0, 0) @ rotate(axis=(1, 0, 0), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
+    sphere_level1_1 = Node(transform=translate(1, 0, 0) @ rotate(axis=(vec(1, 0, 0)), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
     sphere_level1_1.add(sphere_level2_1)
     sphere_level1_1.add(sphere_level2_2)
     sphere_level1_1.add(sphere_level2_3)
     sphere_level1_1.add(sphere_level2_4)
     
-    sphere_level1_2 = Node(transform=translate(-.3, 0, 0) @ rotate(axis=(0, 1, 0), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
+    sphere_level1_2 = Node(transform=translate(-.3, 0, 0) @ rotate(axis=(vec(0, 1, 0)), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
     sphere_level1_2.add(sphere_level2_1)
     sphere_level1_2.add(sphere_level2_2)
     sphere_level1_2.add(sphere_level2_3)
     sphere_level1_2.add(sphere_level2_4)
 
-    sphere_level1_3 = Node(transform=translate(-1, 0, 0) @ rotate(axis=(0, 1, 1), angle=180, radians=None) @ scale(.005, .005, .005), children=[sphere])
+    sphere_level1_3 = Node(transform=translate(-1, 0, 0) @ rotate(axis=(vec(0, 1, 1)), angle=180, radians=None) @ scale(.005, .005, .005), children=[sphere])
     sphere_level1_3.add(sphere_level2_1)
     sphere_level1_3.add(sphere_level2_2)
     sphere_level1_3.add(sphere_level2_3)
@@ -651,7 +651,7 @@ def main():
         0 : vec(-2, .4, 0), 7.5 : vec(-.15, -.2, .5), 8 : vec(0, -.21, .5), 8.5 : vec(.15, -.2, .5), 16 : vec(2, .4, 0)
     }
     flying_dinosaur_rotate_keys = {
-        0: quaternion(.7,1,0), 7: quaternion(0,.6,0), 8: quaternion(-.1,.7,0) ,9: quaternion(-.2, .8,0), 16: quaternion(0.7,-.8,0)
+        0: quaternion(.7,1,0), 7: quaternion(0,.6,0), 8: quaternion(-.1,.7,0) ,9: quaternion(-.2, .8,0), 16: quaternion(0.7,.8,0)
     }
     flying_dinosaur_scale_keys = {0: .0005, 7.5: .002, 8: .002, 8.5: .002, 16: .0005}  
     flying_dinosaur_keynode = KeyFrameControlNode(flying_dinosaur_translate_keys, flying_dinosaur_rotate_keys, flying_dinosaur_scale_keys)
