@@ -180,7 +180,9 @@ def main():
     # place instances of our basic objects
     #viewer.add(SimplePyramid())
     #viewer.add(*load_textured("bunny/bunny.obj"))
-    viewer.add(TexturedPlane('grass.png'))
+    #viewer.add(*load_textured("Flower/Flower.obj"))
+    viewer.add(*load_textured("../fl^RoseR.3DS"))
+    #viewer.add(TexturedPlane('grass.png'))
     #viewer.add(TexturedPlane('grass.png'))
     #viewer.add(SimplePyramidPlain())
 

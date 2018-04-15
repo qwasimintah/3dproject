@@ -209,6 +209,110 @@ class VertexArrayInst:
         GL.glDeleteBuffers(len(self.buffers), self.buffers)
 
 
+
+class CubeTexture:
+    """ Helper class to create and automatically destroy textures """
+    def __init__(self, files=[], wrap_mode=GL.GL_REPEAT, min_filter=GL.GL_LINEAR,
+                 mag_filter=GL.GL_LINEAR_MIPMAP_LINEAR):
+        self.glid = GL.glGenTextures(1)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.glid)
+        # helper array stores texture format for every pixel size 1..4
+        format = [GL.GL_LUMINANCE, GL.GL_LUMINANCE_ALPHA, GL.GL_RGB, GL.GL_RGBA]
+        #sky_faces = ['morning_rt.png', 'morning_lf.png', 'morning_up.png', 'morning_dn.png', 'morning_bk.png', 'morning_ft.png']
+        #sky_faces = ['morning_ft.png', 'morning_bk.png', 'morning_up.png', 'morning_dn.png', 'morning_rt.png', 'morning_lf.png']
+        #sky_faces = ['deception_pass_ft.png', 'deception_pass_bk.png', 'deception_pass_up.png', 'deception_pass_dn.png', 'deception_pass_rt.png', 'deception_pass_lf.png']
+        #sky_faces = ['hills_ft.png', 'hills_bk.png', 'hills_up.png', 'hills_dn.png', 'hills_rt.png', 'hills_lf.png']
+        sky_faces = ['beach_ft.JPG', 'beach_bk.JPG', 'beach_up.JPG', 'beach_dn.JPG', 'beach_rt.JPG', 'beach_lf.JPG']
+        try:
+            for i,file in enumerate(sky_faces):
+            # imports image as a numpy array in exactly right format
+                tex = np.array(Image.open("sor_beach/"+file))
+                #tex = np.array(Image.open("sky/"+file))
+                #print(i)
+                format1 = format[0 if len(tex.shape) == 2 else (tex.shape[2] - 1)]
+                GL.glTexImage2D(GL.GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL.GL_RGBA, tex.shape[1],
+                                tex.shape[0], 0, format1, GL.GL_UNSIGNED_BYTE, tex)
+
+                # GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, wrap_mode)
+                # GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, wrap_mode)
+                # GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, min_filter)
+                # GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, mag_filter)
+                # GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+                message = 'Loaded texture %s\t(%s, %s, %s, %s)'
+                print(message % (file, tex.shape, wrap_mode, min_filter, mag_filter))
+
+            GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
+            GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+            GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_R, GL.GL_CLAMP_TO_EDGE)
+            GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, 0)
+            
+        except FileNotFoundError:
+            print("ERROR: unable to load texture file %s" % file)
+        #GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, 0)
+
+    def __del__(self):  # delete GL texture from GPU when object dies
+        GL.glDeleteTextures(self.glid)
+
+
+
+class CubeTexturedPlane:
+    """ Simple first textured object """
+
+    def __init__(self, file):
+        # feel free to move this up in the viewer as per other practicals
+        self.shader = Shader(TEXTURE_VERT_SKY, TEXTURE_FRAG_SKY)
+        skybox = iter(SKY_BOX_VERTICES)
+        sk_right_triangle = [(x,next(skybox), next(skybox)) for x in skybox]
+        #sk_right_triangle = [(x, next(y), next(y)) for y in [skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front] for x in y ]
+        print(sk_right_triangle)
+        #skybox_vertices = np.array([skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front], dtype=np.float32)
+        #print(skybox_vertices)
+        self.vertex_array = lib_bk.VertexArray([sk_right_triangle])
+
+        # interactive toggles
+        self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
+                           GL.GL_CLAMP_TO_BORDER, GL.GL_CLAMP_TO_EDGE])
+        self.filter = cycle([(GL.GL_NEAREST, GL.GL_NEAREST),
+                             (GL.GL_LINEAR, GL.GL_LINEAR),
+                             (GL.GL_LINEAR, GL.GL_LINEAR_MIPMAP_LINEAR)])
+        self.wrap_mode, self.filter_mode = next(self.wrap), next(self.filter)
+        self.file = file
+
+        # setup texture and upload it to GPU
+        self.texture = CubeTexture(file, self.wrap_mode, *self.filter_mode)
+
+    def draw(self, projection, view, model, win=None, **_kwargs):
+
+        # some interactive elements
+        if win!=None:
+            if glfw.get_key(win, glfw.KEY_F6) == glfw.PRESS:
+                self.wrap_mode = next(self.wrap)
+                self.texture = CubeTexture(self.file, self.wrap_mode, *self.filter_mode)
+
+            if glfw.get_key(win, glfw.KEY_F7) == glfw.PRESS:
+                self.filter_mode = next(self.filter)
+                self.texture = CubeTexture(self.file, self.wrap_mode, *self.filter_mode)
+        GL.glUseProgram(self.shader.glid)
+
+        # projection geometry
+        loc = GL.glGetUniformLocation(self.shader.glid, 'modelviewprojection')
+        GL.glUniformMatrix4fv(loc, 1, True, projection @ view @ model)
+
+        # texture access setups
+        loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP,self.texture.glid)
+        GL.glUniform1i(loc, 0)
+        self.vertex_array.draw(projection, view, model, self.shader)
+
+        # leave clean state for easier debugging
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, 0)
+        GL.glUseProgram(0)
+
+
 class Node:
     """ Scene graph transform and parameter broadcast node """
     def __init__(self, name='', children=(), transform=identity(), **param):
