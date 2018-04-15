@@ -573,63 +573,86 @@ def main():
     """
         Cloud
     """
-    sphere_level3_1 = Node(transform=translate(100, -50, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.5, .5, .5), children=[sphere])
-    sphere_level3_2 = Node(transform=translate(100, 50, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.4, .6, 1), children=[sphere])
-    sphere_level3_3 = Node(transform=translate(50, 100, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.21, .25, .3), children=[sphere])
+    sphere_level3_1 = Node(transform=translate(100, -50, 0) @ rotate(axis=vec(1, 0, 0), angle=0, radians=None) @ scale(.5, .5, .5), children=[sphere])
+    sphere_level3_2 = Node(transform=translate(100, 50, 0) @ rotate(axis=vec(1, 0, 0), angle=0, radians=None) @ scale(.4, .6, 1), children=[sphere])
+    sphere_level3_3 = Node(transform=translate(50, 100, 0) @ rotate(axis=vec(1, 0, 0), angle=0, radians=None) @ scale(.21, .25, .3), children=[sphere])
     
-    sphere_level2_1 = Node(transform=translate(100, 0, 0) @ rotate(axis=(1, 0, 0), angle=0, radians=None) @ scale(.7, .7, .7), children=[sphere])
+    sphere_level2_1 = Node(transform=translate(100, 0, 0) @ rotate(axis=vec(1, 0, 0), angle=0, radians=None) @ scale(.7, .7, .7), children=[sphere])
     sphere_level2_1.add(sphere_level3_1)
     sphere_level2_1.add(sphere_level3_2)
     sphere_level2_1.add(sphere_level3_3)
 
-    sphere_level2_2 = Node(transform=translate(0, 100, 0) @ rotate(axis=(0, 1, 0), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
+    sphere_level2_2 = Node(transform=translate(0, 100, 0) @ rotate(axis=vec(0, 1, 0), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
     sphere_level2_2.add(sphere_level3_1)
     sphere_level2_2.add(sphere_level3_2)
     sphere_level2_2.add(sphere_level3_3)
 
-    sphere_level2_3 = Node(transform=translate(0, -10, 100) @ rotate(axis=(0, 0, 1), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
+    sphere_level2_3 = Node(transform=translate(0, -10, 100) @ rotate(axis=vec(0, 0, 1), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
     sphere_level2_3.add(sphere_level3_1)
     sphere_level2_3.add(sphere_level3_2)
     sphere_level2_3.add(sphere_level3_3)
 
-    sphere_level2_4 = Node(transform=translate(0, -10, -100) @ rotate(axis=(0, 1, 1), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
+    sphere_level2_4 = Node(transform=translate(0, -10, -100) @ rotate(axis=vec(0, 1, 1), angle=90, radians=None) @ scale(.7, .7, .7), children=[sphere])    
     sphere_level2_4.add(sphere_level3_1)
     sphere_level2_4.add(sphere_level3_2)
     sphere_level2_4.add(sphere_level3_3)
 
 
 
-    sphere_level1_1 = Node(transform=translate(1, 0, 0) @ rotate(axis=(1, 0, 0), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
+    sphere_level1_1 = Node(transform=translate(1, 0, 0) @ rotate(axis=vec(1, 0, 0), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
     sphere_level1_1.add(sphere_level2_1)
     sphere_level1_1.add(sphere_level2_2)
     sphere_level1_1.add(sphere_level2_3)
     sphere_level1_1.add(sphere_level2_4)
     
-    sphere_level1_2 = Node(transform=translate(-.3, 0, 0) @ rotate(axis=(0, 1, 0), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
+    sphere_level1_2 = Node(transform=translate(-.3, 0, 0) @ rotate(axis=vec(0, 1, 0), angle=90, radians=None) @ scale(.005, .005, .005), children=[sphere])
     sphere_level1_2.add(sphere_level2_1)
     sphere_level1_2.add(sphere_level2_2)
     sphere_level1_2.add(sphere_level2_3)
     sphere_level1_2.add(sphere_level2_4)
 
-    sphere_level1_3 = Node(transform=translate(-1, 0, 0) @ rotate(axis=(0, 1, 1), angle=180, radians=None) @ scale(.005, .005, .005), children=[sphere])
+    sphere_level1_3 = Node(transform=translate(-1, 0, 0) @ rotate(axis=vec(0, 1, 1), angle=180, radians=None) @ scale(.005, .005, .005), children=[sphere])
     sphere_level1_3.add(sphere_level2_1)
     sphere_level1_3.add(sphere_level2_2)
     sphere_level1_3.add(sphere_level2_3)
     sphere_level1_3.add(sphere_level2_4)
 
-    translate_keys1 = {1 : vec(-1, .6, 0), 50 : vec(2, 0, 0)}
+    translate_keys3 = {0 : vec(0, .65, 0), 50 : vec(3, 0, 0)}
+    translate_keys1 = {0 : vec(-1, .6, 0), 50 : vec(3, 0, 0)}
+    translate_keys2 = {0 : vec(-2, .7, 0), 50 : vec(4, 0, 0)}
+
     rotate_keys1 = {0: quaternion(1, 0, 0), 50: quaternion(0,1,1)}
     rotate_keys2 = {0: quaternion(1, 0, 0), 50: quaternion(1,.5,0)}
     rotate_keys3 = {0: quaternion(0, 0, 0), 50: quaternion(0,1,0)}
     scale_keys1 = {0: .25}
-    keynode1 = KeyFrameControlNode(translate_keys1, rotate_keys1, scale_keys1)
-    keynode2 = KeyFrameControlNode(translate_keys1, rotate_keys2, scale_keys1)
-    keynode3 = KeyFrameControlNode(translate_keys1, rotate_keys3, scale_keys1)
+    scale_keys2 = {0: .3}
+    scale_keys3 = {0: .2}
+
+    keynode1 = KeyFrameControlNode(translate_keys1, rotate_keys3, scale_keys1)
+    keynode2 = KeyFrameControlNode(translate_keys1, rotate_keys2, scale_keys3)
+    keynode3 = KeyFrameControlNode(translate_keys2, rotate_keys3, scale_keys2)
+
+    keynode4 = KeyFrameControlNode(translate_keys2, rotate_keys2, scale_keys1)
+    keynode5 = KeyFrameControlNode(translate_keys2, rotate_keys2, scale_keys2)
+    keynode6 = KeyFrameControlNode(translate_keys3, rotate_keys3, scale_keys1)
+
+    keynode7 = KeyFrameControlNode(translate_keys3, rotate_keys1, scale_keys1)
+    keynode8 = KeyFrameControlNode(translate_keys1, rotate_keys1, scale_keys3)
+    keynode9 = KeyFrameControlNode(translate_keys3, rotate_keys2, scale_keys1)
 
     keynode1.add(sphere_level1_1)
     keynode2.add(sphere_level1_2)
     keynode3.add(sphere_level1_3)
-    viewer.add(keynode1, keynode2, keynode3)
+
+    keynode4.add(sphere_level1_1)
+    keynode5.add(sphere_level1_2)
+    keynode6.add(sphere_level1_3)
+
+    keynode7.add(sphere_level1_1)
+    keynode8.add(sphere_level1_2)
+    keynode9.add(sphere_level1_3)
+
+    viewer.add(keynode1, keynode2, keynode3, keynode4, keynode5, keynode6, keynode7, keynode8, keynode9)
 
 
     """
