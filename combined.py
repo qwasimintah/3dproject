@@ -157,7 +157,7 @@ SKY_BOX_VERTICES = [
      1.0, -1.0,  1.0]
 
 
-SKY_BOX_VERTICES = list(map(lambda x:x*200, SKY_BOX_VERTICES))
+SKY_BOX_VERTICES = list(map(lambda x:x*150, SKY_BOX_VERTICES))
 
 
 
@@ -216,7 +216,7 @@ class CubeTexturedPlane:
         # feel free to move this up in the viewer as per other practicals
         self.shader = Shader(TEXTURE_VERT_SKY, TEXTURE_FRAG_SKY)
         skybox = iter(SKY_BOX_VERTICES)
-        translate = 10
+        translate = 95
         sk_right_triangle = [(x + translate,next(skybox), next(skybox)) for x in skybox]
         #sk_right_triangle = [(x, next(y), next(y)) for y in [skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front] for x in y ]
         print(sk_right_triangle)
@@ -1283,6 +1283,8 @@ class FlyingDinosaur(Node):
 
 
 
+
+
 def load(file, color=None):
     """ load resources from file using pyassimp, return list of ColorMesh """
     try:
@@ -1302,6 +1304,179 @@ def load(file, color=None):
     return meshes
 
 
+#------------------------- fountain like effect -------------------------------
+
+PARTICLES = 500
+# -------------- Example texture plane class ----------------------------------
+TEXTURE_VERT1 = """#version 330 core
+uniform mat4 modelviewprojection;
+layout(location = 0) in vec3 position;
+uniform vec3 offsets[%d];
+uniform mat4 scale;
+
+out vec2 fragTexCoord;
+void main() {
+   vec3 offset = offsets[gl_InstanceID];
+   //mat4 rotation = rotations[gl_InstanceID];
+   gl_Position = modelviewprojection *scale * (vec4(position ,1) + vec4(offset,1)) ;
+   fragTexCoord = position.xy;
+}""" %(PARTICLES)
+
+TEXTURE_FRAG1 = """#version 330 core
+uniform sampler2D diffuseMap;
+in vec2 fragTexCoord;
+out vec4 outColor;
+void main() {
+   outColor = texture(diffuseMap, fragTexCoord);
+}"""
+
+
+class TexturedPlane1:
+    """ Simple first textured object """
+
+    def __init__(self, file):
+        # feel free to move this up in the viewer as per other practicals
+        self.shader = Shader(TEXTURE_VERT1, TEXTURE_FRAG1)
+
+        # triangle and face buffers
+        #vertices = 100 * np.array(((-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)), np.float32)
+        #vertices = np.array(((-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (-0.5, 0.5, 0.0), (0.5, 0.5, 0.0)), np.float32)
+        vertices = np.array(((-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (0.5, 0.5, 0.0), (-0.5, 0.5, 0.0)), np.float32)
+        faces = np.array(((0, 1, 2), (0, 2, 3)), np.uint32)
+        self.vertex_array = VertexArrayPlaneInst([vertices], PARTICLES , faces)
+
+        # interactive toggles
+        self.wrap = cycle([GL.GL_REPEAT, GL.GL_MIRRORED_REPEAT,
+                           GL.GL_CLAMP_TO_BORDER, GL.GL_CLAMP_TO_EDGE])
+        self.filter = cycle([(GL.GL_NEAREST, GL.GL_NEAREST),
+                             (GL.GL_LINEAR, GL.GL_LINEAR),
+                             (GL.GL_LINEAR, GL.GL_LINEAR_MIPMAP_LINEAR)])
+        self.wrap_mode, self.filter_mode = next(self.wrap), next(self.filter)
+        self.file = file
+
+        # setup texture and upload it to GPU
+        self.texture = Texture(file, self.wrap_mode, *self.filter_mode)
+
+    def draw(self, projection, view, model, win=None, **_kwargs):
+
+        # some interactive elements
+        if win!=None:
+            if glfw.get_key(win, glfw.KEY_F6) == glfw.PRESS:
+                self.wrap_mode = next(self.wrap)
+                self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
+
+            if glfw.get_key(win, glfw.KEY_F7) == glfw.PRESS:
+                self.filter_mode = next(self.filter)
+                self.texture = Texture(self.file, self.wrap_mode, *self.filter_mode)
+        GL.glUseProgram(self.shader.glid)
+        t = glfw.get_time()
+
+        #offsets for instances
+        translations = np.zeros(shape=(PARTICLES, 3))
+        #rotations = np.zeros(shape=(300,3))
+
+        #initial = [,1,0
+        
+        tfast = (t * 0.05) % (PARTICLES*5.5/9.82)
+        g = [0,-9.82,0]
+        
+        scalar = 36
+        d = 0.1
+        yd =10
+
+        for i in range(PARTICLES):
+            tfasti = tfast + i/PARTICLES 
+            y = g[1]*tfasti*tfasti + (5.5*((i)/2) *tfasti)
+            translations[i][2] = sin(i*scalar)/d*-tfasti 
+            translations[i][1] = y/yd  
+            translations[i][0] = cos(i*scalar)/d *-tfasti
+
+        #for i in range(300):
+            #rotations[i][0]=alpha 
+
+        for i in range(PARTICLES):
+            lco = GL.glGetUniformLocation(self.shader.glid, 'offsets[%d]' % i)
+            GL.glUniform3fv(lco, 1, translations[i])
+        l = GL.glGetUniformLocation(self.shader.glid, 'scale')
+            #GL.glUniform3fv(l, 1, rotations[i])
+        GL.glUniformMatrix4fv(l, 1, True, scale(0.001))
+
+        #for i in range(300):
+            #rotations[i][0]=alpha 
+
+        for i in range(10):
+            lco = GL.glGetUniformLocation(self.shader.glid, 'offsets[%d]' % i)
+            GL.glUniform3fv(lco, 1, translations[i])
+        # projection geometry
+        loc = GL.glGetUniformLocation(self.shader.glid, 'modelviewprojection')
+        GL.glUniformMatrix4fv(loc, 1, True, projection @ view @ model)
+
+        # texture access setups
+        loc = GL.glGetUniformLocation(self.shader.glid, 'diffuseMap')
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture.glid)
+        GL.glUniform1i(loc, 0)
+        self.vertex_array.draw(GL.GL_TRIANGLES)
+
+        # leave clean state for easier debugging
+        GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+        GL.glUseProgram(0)
+
+
+
+class VertexArrayPlaneInst:
+    """helper class to create and self destroy vertex array objects."""
+    def __init__(self, attributes,number, index=None, usage=GL.GL_STATIC_DRAW):
+        """ Vertex array from attributes and optional index array. Vertex
+            attribs should be list of arrays with dim(0) indexed by vertex. """
+
+        # create vertex array object, bind it
+        self.glid = GL.glGenVertexArrays(1)
+        GL.glBindVertexArray(self.glid)
+        self.buffers = []  # we will store buffers in a list
+        nb_primitives, size = 0, 0
+        self.instances = number
+        # load a buffer per initialized vertex attribute (=dictionary)
+        for loc, data in enumerate(attributes):
+            if data is None:
+                continue
+
+            # bind a new vbo, upload its data to GPU, declare its size and type
+            self.buffers += [GL.glGenBuffers(1)]
+            data = np.array(data, np.float32, copy=False)
+            nb_primitives, size = data.shape
+            GL.glEnableVertexAttribArray(loc)  # activates for current vao only
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.buffers[-1])
+            GL.glBufferData(GL.GL_ARRAY_BUFFER, data, usage)
+            GL.glVertexAttribPointer(loc, size, GL.GL_FLOAT, False, 0, None)
+
+        # optionally create and upload an index buffer for this object
+        self.draw_command = GL.glDrawArraysInstanced
+        self.arguments = (0, nb_primitives)
+        if index is not None:
+            self.buffers += [GL.glGenBuffers(1)]
+            index_buffer = np.array(index, np.int32, copy=False)
+            GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, self.buffers[-1])
+            GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, index_buffer, usage)
+            self.draw_command = GL.glDrawElementsInstanced
+            self.arguments = (index_buffer.size, GL.GL_UNSIGNED_INT, None)
+            print(self.arguments)
+
+        # cleanup and unbind so no accidental subsequent state update
+        GL.glBindVertexArray(0)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+        GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, 0)
+
+    def draw(self, primitive):
+        """draw a vertex array, either as direct array or indexed array"""
+        GL.glBindVertexArray(self.glid)
+        self.draw_command(primitive, *self.arguments, self.instances)
+        GL.glBindVertexArray(0)
+
+
+    def __del__(self):  # object dies => kill GL array and buffers from GPU
+        GL.glDeleteVertexArrays(1, [self.glid])
+        GL.glDeleteBuffers(len(self.buffers), self.buffers)
 
 
 # ------------  Viewer class & window management ------------------------------
@@ -1413,7 +1588,7 @@ class Viewer:
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*self.pos) @ translate(*self.opos) @ identity()
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos)) @ identity()
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos)) @ identity()
-            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos))
+            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate((*self.pos + self.campos))
             # delme
             self.view = view
             #view = translate(*(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix() 
@@ -1693,6 +1868,7 @@ def main():
 
 
     viewer.add(CubeTexturedPlane(files))
+    viewer.add(TexturedPlane1('fire.jpeg'))
 
     #viewer.add(*[mesh for file in sys.argv[1:] for mesh in load(file)])
     #viewer.add(*[mesh for file in ["trex.obj"] for mesh in load(file)])
