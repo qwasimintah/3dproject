@@ -20,9 +20,14 @@ from transform import Trackball, identity
 from grid_texture import generate_perlin_grid
 from PIL import Image               # load images for textures
 import copy
+from OpenGL.GLU import *
+from OpenGL.GLUT import *
+from OpenGL.GL.ARB.framebuffer_object import *
+from OpenGL.GL.EXT.framebuffer_object import *
 
 import math
 import random
+
 
 # ------------ low level OpenGL object wrappers ----------------------------
 class Shader:
@@ -66,6 +71,69 @@ class Shader:
         GL.glUseProgram(0)
         if self.glid:                      # if this is a valid shader object
             GL.glDeleteProgram(self.glid)  # object dies => destroy GL object
+
+################# fire shaders #####################################
+
+FIRE_VERTEX = """
+out vec3 v;
+out vec3 N;
+
+void main(void)
+{
+
+   v = gl_ModelViewMatrix * gl_Vertex;
+   N = gl_NormalMatrix * gl_Normal;
+
+   gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+   gl_TexCoord[0]=gl_TextureMatrix[0] * gl_MultiTexCoord0;
+}
+"""
+
+FIRE_FRAGMENT = """
+const int MaxKernelSize=25;
+uniform vec3 OffsetWeight[MaxKernelSize];
+uniform int KernelSize;
+uniform sampler2D BaseImage; 
+varying vec3 N;
+varying vec3 v;
+
+void main(void)
+{
+  int i;
+  vec4 sum=vec4(0.0);
+  for (i=0;i<KernelSize;i++) {
+     sum+=texture2D(BaseImage,gl_TexCoord[0].st+OffsetWeight[i].st)*OffsetWeight[i].z;
+  }
+  gl_FragColor=sum;
+}
+"""
+
+FIRE_COLOR_FRAGMENT = """
+const int MaxKernelSize=25;
+uniform sampler2D BaseImage;
+varying vec3 N;
+varying vec3 v;
+
+void main(void)
+{
+  int i;
+  vec4 sum=vec4(0.0);
+  sum=texture2D(BaseImage,gl_TexCoord[0].st+vec2(0,0));
+
+  if (sum.x<0.1) {
+    gl_FragColor=vec4(0.0,0.0,0.0,0.0);    
+  } else if (sum.x<0.2) {
+    gl_FragColor=vec4((sum.x-0.1)*10.0,0.0,0.0,0.0);
+  } else if (sum.x<0.3) {
+    gl_FragColor=vec4(1.0,(sum.x-0.2)*10.0,0.0,0.0);
+  } else if (sum.x<0.4) {
+    gl_FragColor=vec4(1.0,1.0,(sum.x-0.3)*10.0,0.0);
+  } else {
+    gl_FragColor=vec4(1.0,1.0,1.0,0.0);
+  } 
+}
+"""
+
 
 
 
@@ -688,6 +756,113 @@ void main() {
     outColor = vec4(r, g, b, 1);
 }"""
 
+
+
+class Fire:
+    """ Simple first textured object """
+
+    def __init__(self):
+        # feel free to move this up in the viewer as per other practicals
+        #self.shader = Shader(FIRE_VERTEX, FIRE_FRAGMENT)
+        self.shader = Shader(TEXTURE_VERT, TEXTURE_FRAG)
+        firew=64
+        fireh=64
+
+        texture=glGenTextures( 1 )
+            
+        GL.glBindTexture( GL.GL_TEXTURE_2D, texture );
+        GL.glTexEnvf( GL.GL_TEXTURE_ENV, GL.GL_TEXTURE_ENV_MODE, GL.GL_MODULATE );
+        GL.glTexParameterf( GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S,
+                         GL.GL_REPEAT);
+        GL.glTexParameterf( GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
+                             GL.GL_REPEAT );
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+
+        GL.glTexImage2D(GL_TEXTURE_2D, 0,GL_LUMINANCE,
+                     firew,fireh,0,GL_LUMINANCE,GL_FLOAT,numpy.zeros([firew,fireh,1],float)) 
+
+        GL.glEnable( GL.GL_TEXTURE_2D );
+        GL.glBindTexture( GL.GL_TEXTURE_2D, texture );
+
+        newtexture=glGenTextures( 1 )
+    
+        GL.glBindTexture( GL.GL_TEXTURE_2D, newtexture );
+        GL.glTexEnvf( GL.GL_TEXTURE_ENV, GL.GL_TEXTURE_ENV_MODE, GL.GL_MODULATE );
+        GL.glTexParameterf( GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S,
+                         GL.GL_REPEAT );
+        GL.glTexParameterf( GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
+                         GL.GL_REPEAT );
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0,GL.GL_LUMINANCE,firew,fireh,0,GL.GL_LUMINANCE,
+                     GL.GL_FLOAT, numpy.zeros([firew,fireh,1],float))
+
+
+    def draw(self, projection, view, model, win=None, **_kwargs):
+
+        GL.glUseProgram(self.shader.glid)
+        # projection geometry
+        ks_location = GL.glGetUniformLocation(self.shader.glid, 'OffsetWeight')
+        GL.glUniform3fv(ks_location,3,
+             [[  0.001,  0.0  , 0.32],
+              [ -0.001,  0.0  , 0.32],
+              [  0    , -0.001, 0.32],
+              ]); # just some blur
+
+        GL.glUniform3fv(ks_location, 1, (0.01,0.01,0.01))
+
+        t = glfw.get_time()
+        l_location = GL.glGetUniformLocation(self.shader.glid, 'KernelSize')
+        #GL.glUniform3fv(l_location, 1, (math.cos(t), 0, math.sin(t)))
+        GL.glUniform1i(l_location,3);
+
+        #GL.glUniform3fv(l_location, 1, (0.5, 0, -0.75))
+        loc = GL.glGetUniformLocation(self.shader.glid, 'BaseImage')
+        GL.glUniform1i(loc,0);
+        alpha=sin(t/73.0)
+
+        x=0
+        y=0.004+(cos(t/43.0)+1.0)/50.0
+
+        # render to texture (render next step of fire effect)
+
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo)
+
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, 
+                                  GL_TEXTURE_2D, newtexture, 0)
+            
+        glPushAttrib(GL_VIEWPORT_BIT) # save viewport
+        
+        glViewport(0, 0, firew, fireh) # set to fire effect dimensions
+
+        glUseProgram(fire_program) # use fire blur
+
+        # first draw blurred/displaced fire
+
+        glBindTexture( GL_TEXTURE_2D, texture )
+        glLoadIdentity()
+
+        glTranslatef(x,y,0)
+        glRotatef(alpha,0,0,1)
+
+        glBegin(GL_QUADS)
+
+        glTexCoord2f(0,0)
+        glVertex2f(-1,-1)
+        glTexCoord2f(1,0)
+        glVertex2f( 1,-1)
+        glTexCoord2f(1,1)
+        glVertex2f( 1, 1)
+        glTexCoord2f(0,1)
+        glVertex2f(-1, 1)
+        
+        glEnd()
+        GL.glUseProgram(0)
+
+
+
 class TexturedMesh:
     """ Simple first textured object """
 
@@ -1061,11 +1236,13 @@ class Viewer:
         GL.glClearColor(0.1, 0.1, 0.1, 0.1)
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glEnable(GL.GL_CULL_FACE)
+        GLUT.glMatrixMode(GL.GL_MODELVIEW);
+
         #GL.glFrontFace ( GL.GL_CW )
 
         #GL.glCullFace( GL.GL_BACK)
         #GL.glDepthFunc(GL.GL_LEQUAL);
-        self.color_shader = Shader(COLOR_VERT, COLOR_FRAG)
+        self.color_shader = Shader(FIRE_VERTEX, FIRE_COLOR_FRAGMENT)
         # compile and initialize shader programs once globally
 
         # initially empty list of object to draw
@@ -1225,27 +1402,27 @@ def main():
     # #trees = load_textured_n_instances("Tree/Tree.obj", 25)
     # print("Loading %d instances if Tree" % len(tree_bases))
     # trees = load_textured_n_instances("Tree/Tree.obj", len(tree_bases))
-    trees = load_textured_n_instances("rock.obj", 25)
-    amount = 100
-    radius = 50.
-    offset = 2.5
-    model_array=[]
+    # trees = load_textured_n_instances("Tree/Tree.obj", 100)
+    # print(len(trees))
+    # amount = 100
+    # radius = 50.
+    # offset = 2.5
+    # model_array=[]
 
-    for i in range(0, amount):
-        angle = i/amount *360
-        dis = random.random() % 2*offset*100/100-offset
-        x = math.sin(angle) * radius + dis
-        dis = (random.random() % (2 * offset * 100)) / 100. - offset;
-        y = dis * 0.4; # keep height of field smaller compared to width of x and z
-        dis = (random.random() % (int)(2 * offset * 100)) / 100.0 - offset;
-        z = math.cos(angle) * radius + dis;
-        model = [x, y, z]        
-        model_array.append(model)
+    # for i in range(0, amount):
+    #     angle = i/amount *360
+    #     dis = random.random() % 2*offset*100/100-offset
+    #     x = math.sin(angle) * radius + dis
+    #     y = dis * 0.4; # keep height of field smaller compared to width of x and z
+    #     dis = (random.random() % (int)(2 * offset * 100)) / 100.0 - offset;
+    #     z = math.cos(angle) * radius + dis;
+    #     model = [x, y, z]        
+    #     model_array.append(model)
 
 
-    for i in range(0,99):
-        trees[1].positions = model_array[i] 
-        viewer.add(trees[1])
+    # for t in trees:
+    #     t.positions = model_array 
+    #     viewer.add(t)
     #tree1, tree2 = load_textured2("Tree/Tree.obj")
     #tree2 = load_textured("Tree/Tree.obj")
     #viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
@@ -1254,7 +1431,8 @@ def main():
     #for m in tree2:
     #    m.transform = translate(1,1,1)
     #viewer.add(*tree1)
-    #viewer.add(*tree2)
+    viewer.add(*tree2)
+    #viewer.add(Fire())
 
     #if len(sys.argv) < 2:
     if False:
