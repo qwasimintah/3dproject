@@ -425,6 +425,7 @@ class SkinningControlNode(Node):
         #    print("Non null kfs : ", self)
         #else:
         #    print("    null kfs : ", self)
+        #self.tmax = tmax
         self.world_transform = identity()
         self.time = 0
         self.orientation = 0 # TODO: think of something better
@@ -477,6 +478,23 @@ class SkinningControlNode(Node):
             if isinstance(c, SkinningControlNode):
                 c.set_time_all(value, add)
 
+    def set_tmax(self):
+
+        def get_tmax(x):
+            if not isinstance(x, SkinningControlNode):
+                return 0
+            tself = x.tmax
+            if tself is None:
+                tself = 0
+            if len(x.children) > 0:
+                tchildren = max([get_tmax(c) for c in x.children])
+            else:
+                tchildren = 0
+            return max(tself, tchildren)
+
+        self.tmax = get_tmax(self)
+
+
 class Controlled():
     def __init__(self, node):
         self.node = node
@@ -484,6 +502,8 @@ class Controlled():
         #self.rotation = np.zeros(shape=(3), dtype=np.float)
         self.alpha = 0
         self.scaling = np.array([1.,1.,1.], dtype=np.float)
+        self.in_action = False
+        self.last_frame = 0
 
     def draw(self, projection, view, model, **param):
 
@@ -491,6 +511,18 @@ class Controlled():
         scale_matrix = scale(self.scaling)
         rotate_matrix = rotate(axis=vec(0,1,0), angle=self.alpha)
 
+        if self.in_action:
+            print("In action")
+            t = glfw.get_time()
+            #self.node.set_time_all(0.1, True)
+            self.node.set_time_all(t - self.last_frame)
+            #self.node.time = t
+            #if self.node.time > self.node.tmax:
+            if t - self.last_frame > self.node.tmax:
+                print("Exit -- ", t - self.last_frame, " / ", self.node.tmax)
+                self.in_action = False
+                self.node.set_time_all(0)
+                self.last_frame = t
         #model = translate_matrix @ rotate_matrix @ scale_matrix @ self.node.transform @ model
         #model = model @ translate_matrix @ rotate_matrix @ scale_matrix @ self.node.transform
         model = translate_matrix @ rotate_matrix @ model
@@ -536,8 +568,14 @@ def load_skinned(file):
         """ Recursively builds nodes for our graph, matching pyassimp nodes """
         trs_keyframes = transform_keyframes.get(pyassimp_node.name, (None,))
 
+        tmax = None
+        if len(trs_keyframes) > 0 and trs_keyframes[0] is not None:
+            tmax = max([max(trs_keyframes[i].keys()) for i in range(len(trs_keyframes))])
+            print("tmax : ", tmax)
         node = SkinningControlNode(*trs_keyframes, name=pyassimp_node.name,
                                    transform=pyassimp_node.transformation)
+        node.tmax = tmax
+        #node.set_tmax()
         nodes[pyassimp_node.name] = node, pyassimp_node
         node.add(*(make_nodes(child) for child in pyassimp_node.children))
         return node
@@ -1139,8 +1177,8 @@ class Viewer:
 
             # finding a good distance for the camera
             camera_posisition = (self.pos + self.campos)
-            print("elev : ", get_elevation(self.ground, self.ground_size, camera_posisition[0], camera_posisition[2]))
-            print("camera_pos : ", camera_posisition)
+            #print("elev : ", get_elevation(self.ground, self.ground_size, camera_posisition[0], camera_posisition[2]))
+            #print("camera_pos : ", camera_posisition)
             for x in range(20):
                 camera_posisition = (self.pos + self.campos)
                 zt = get_elevation(self.ground, self.ground_size, camera_posisition[0], camera_posisition[2])
@@ -1178,6 +1216,7 @@ class Viewer:
             #self.controlled = drawables
             self.controlled = Controlled(drawables[0])
             self.controlled.translation += spawn
+            self.controlled.node.set_tmax()
             #self.pos = -1*self.controlled.node.transform[..., 3][:3]
             self.pos = -1*self.controlled.translation
             print("position of camera : ", self.pos)
@@ -1196,6 +1235,18 @@ class Viewer:
     def on_key(self, _win, key, _scancode, action, _mods):
         """ 'Q' or 'Escape' quits """
         if action == glfw.PRESS or action == glfw.REPEAT:
+            #if self.controlled.in_action:
+            #    print("In action")
+            #    self.controlled.node.set_time_all(0.1, True)
+            #    if self.controlled.node.time > self.controlled.node.tmax:
+            #        print("Exit -- ", self.controlled.node.time, " / ", self.controlled.node.tmax)
+            #        self.controlled.in_action = False
+            #        self.controlled.node.set_time_all(0)
+            #        return
+
+            #if self.controlled.in_action:
+            #    return
+
             if key == glfw.KEY_T:
                 #print(glfw.get_time())
                 print("# view : ")
@@ -1208,6 +1259,8 @@ class Viewer:
                 print(self.pos)
                 print("# self.campos :")
                 print(self.campos)
+                print("# tmax :")
+                print(self.controlled.node.tmax)
             if key == glfw.KEY_ESCAPE:
                 glfw.set_window_should_close(self.win, True)
             if key == glfw.KEY_P:
@@ -1230,14 +1283,18 @@ class Viewer:
             if key == glfw.KEY_W:
                 #self.controlled.transform = translate(0,0,0.1) @ self.controlled.transform
                 #self.controlled.keyframes.translate_keys
-
-                d = self.controlled.node
+                if not self.controlled.in_action:
+                    print("W action")
+                    d = self.controlled.node
+                    self.controlled.in_action = True
+                    self.controlled.last_frame = glfw.get_time()
 
                 tr = (0,0,-0.1,1)
                 #self.pos -= (rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]
 
-                if d.time > 0.8:
-                    d.set_time_all(0)
+                #if d.time > 0.8:
+                #    d.set_time_all(0)
+                #self.controlled.node.set_time_all(glfw.get_time())
 
                 #trd = (rotate(axis=vec(0,1,0), angle=d.orientation) @ tr)[:3]
                 trd = (rotate(axis=vec(0,1,0), angle=self.controlled.alpha) @ tr)[:3]
@@ -1245,14 +1302,14 @@ class Viewer:
                 #cur_pos = d.world_transform[...,3][:3]
                 cur_pos = self.controlled.translation
                 new_pos = cur_pos + trd
-                print("- ", trd)
+                #print("- ", trd)
 
                 #newz = get_elevation(self.ground, 101, new_pos[0], new_pos[2])
-                print("size of ground : ", len(self.ground))
-                print("pos :", cur_pos)
+                #print("size of ground : ", len(self.ground))
+                #print("pos :", cur_pos)
                 newz = get_elevation(self.ground, self.ground_size, new_pos[0], new_pos[2])
                 trd[1] = newz - cur_pos[1]
-                print("------ ", trd)
+                #print("------ ", trd)
 
                 #self.pos[1] -= trd[1]
 
@@ -1263,7 +1320,7 @@ class Viewer:
                 #self.pos -= d.transform[...,3][:3] - cur_pos
                 #self.pos -= self.controlled.translation - cur_pos
                 self.pos -= trd
-                d.set_time_all(0.03, True)
+                #d.set_time_all(0.03, True)
 
 
                 ##self.defpos -= tr[:3]
@@ -1396,14 +1453,15 @@ def main():
     for t in trees:
         t.positions = tree_bases
         # TODO: UNCOMMENT ME
-        viewer.add(t)
+        #viewer.add(t)
 
     #tree1, tree2 = load_textured2("Tree/Tree.obj")
     #tree2 = load_textured("Tree/Tree.obj")
     viewer.add(TexturedMesh(Texture('ground_tex.png'), [vertices, tex_uv, normals], faces))
     #viewer.add(*load_skinned("dino/Dinosaurus_run.dae"), controlled=True)
-    dino = load_skinned("dino/Dinosaurus_run.dae")
-    dino[0].world_transform = translate(0,0,10) @ dino[0].world_transform
+    #dino = load_skinned("dino/Dinosaurus_run.dae")
+    dino = load_skinned("dino/Dinosaurus_walk.dae")
+    #dino[0].world_transform = translate(0,0,10) @ dino[0].world_transform
     #spawn_dino = vertices[int(size/2) * size + int(size/2)]
     #spawn_dino = vertices[int(size*size/2)]
     spawn_dino = vertices[int(size/2)*(size+1)+int(size/2)]
@@ -1411,6 +1469,7 @@ def main():
     print("spawned the dinosaur at ", spawn_dino)
     #dino[0].transform = translate(*spawn_dino) @ dino[0].transform
     viewer.add(*dino, controlled=True, spawn=spawn_dino)
+    #print("DINO, ", dino, type(dino))
     #viewer.controlled.translation = spawn_dino
             #m.transform = rotate(axis=vec(0,1,0),angle=90.0) 
     #tree2 = copy.deepcopy(tree1)
