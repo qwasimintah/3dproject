@@ -157,7 +157,7 @@ SKY_BOX_VERTICES = [
      1.0, -1.0,  1.0]
 
 
-SKY_BOX_VERTICES = list(map(lambda x:x*150, SKY_BOX_VERTICES))
+SKY_BOX_VERTICES = list(map(lambda x:x*200, SKY_BOX_VERTICES))
 
 
 
@@ -216,7 +216,7 @@ class CubeTexturedPlane:
         # feel free to move this up in the viewer as per other practicals
         self.shader = Shader(TEXTURE_VERT_SKY, TEXTURE_FRAG_SKY)
         skybox = iter(SKY_BOX_VERTICES)
-        translate = 95
+        translate = 10
         sk_right_triangle = [(x + translate,next(skybox), next(skybox)) for x in skybox]
         #sk_right_triangle = [(x, next(y), next(y)) for y in [skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front] for x in y ]
         print(sk_right_triangle)
@@ -1283,8 +1283,6 @@ class FlyingDinosaur(Node):
 
 
 
-
-
 def load(file, color=None):
     """ load resources from file using pyassimp, return list of ColorMesh """
     try:
@@ -1479,6 +1477,7 @@ class VertexArrayPlaneInst:
         GL.glDeleteBuffers(len(self.buffers), self.buffers)
 
 
+
 # ------------  Viewer class & window management ------------------------------
 class Viewer:
     """ GLFW viewer window, with classic initialization & graphics loop """
@@ -1588,7 +1587,7 @@ class Viewer:
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*self.pos) @ translate(*self.opos) @ identity()
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos)) @ identity()
             #view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos)) @ identity()
-            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate((*self.pos + self.campos))
+            view = rotate(axis=vec(0,1,0), angle=self.alpha) @ translate(*(self.pos + self.campos))
             # delme
             self.view = view
             #view = translate(*(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))) @ self.trackball.view_matrix() 
@@ -1597,7 +1596,7 @@ class Viewer:
             #view[3][0] = view[2][0]
             #print(-10*glfw.get_time()*normalized(self.trackball.view_matrix()[..., 2][:3]))
             projection = self.trackball.projection_matrix(winsize)
-            view = self.trackball.view_matrix()
+            # view = self.trackball.view_matrix()
             # draw our scene objects
             for drawable in self.drawables:
                 drawable.draw(projection, view, identity(), win=self.win,
@@ -1802,16 +1801,16 @@ def main():
     sphere_level1_3.add(sphere_level2_3)
     sphere_level1_3.add(sphere_level2_4)
 
-    translate_keys3 = {0 : vec(0, .95, 0), 50 : vec(3, 0, 0)}
-    translate_keys1 = {0 : vec(-1, .9, 0), 50 : vec(3, 0, 0)}
-    translate_keys2 = {0 : vec(-2, 1, 0), 50 : vec(4, 0, 0)}
+    translate_keys3 = {0 : vec(50, 20, -6), 50 : vec(110, 20, -1)}
+    translate_keys1 = {0 : vec(60, 30, -6), 50 : vec(140, 30, -1)}
+    translate_keys2 = {0 : vec(50, 20, -6), 50 : vec(130, 20, -1)}
 
     rotate_keys1 = {0: quaternion(1, 0, 0), 50: quaternion(0,1,1)}
     rotate_keys2 = {0: quaternion(1, 0, 0), 50: quaternion(1,.5,0)}
     rotate_keys3 = {0: quaternion(0, 0, 0), 50: quaternion(0,1,0)}
-    scale_keys1 = {0: .5}
-    scale_keys2 = {0: .6}
-    scale_keys3 = {0: .7}
+    scale_keys1 = {0: 4}
+    scale_keys2 = {0: 5}
+    scale_keys3 = {0: 6}
 
     keynode1 = KeyFrameControlNode2(translate_keys1, rotate_keys3, scale_keys1)
     keynode2 = KeyFrameControlNode2(translate_keys1, rotate_keys2, scale_keys3)
@@ -1843,7 +1842,7 @@ def main():
         Sun
     """
     dim = 200
-    sun_translate_keys = {4*i : -1 * dim * vec(math.cos(math.radians(i*10)) ,  .8 * math.sin(math.radians(-i*10))+.6, .1*i ) for i in range(0,17)}
+    sun_translate_keys = {4*i : -1 * dim * vec(math.cos(math.radians(i*10)) - .3,  .8 * math.sin(math.radians(-i*10))+.55, .4 ) for i in range(0,17)}
     sun_rotate_keys = {0: quaternion(), 2: quaternion(), 3: quaternion(), 4: quaternion()}
     sun_scale_keys = {0: 5}
     sun_keynode = KeyFrameControlNode2(sun_translate_keys, sun_rotate_keys, sun_scale_keys)
@@ -1855,12 +1854,12 @@ def main():
         Flying Dinosaur
     """
     flying_dinosaur_translate_keys = {
-        0 : vec(-2, .4, 0), 7.5 : vec(-.15, -.2, .5), 8 : vec(0, -.21, .5), 8.5 : vec(.15, -.2, .5), 16 : vec(2, .4, 0)
+        0 : vec(70, 25, 20), 7.5 : vec(90, 10, 31), 8 : vec(95, 9, 31), 8.5 : vec(100, 10, 31), 16 : vec(120, 30, 20)
     }
     flying_dinosaur_rotate_keys = {
         0: quaternion(.7,1,0), 7: quaternion(0,.6,0), 8: quaternion(-.1,.7,0) ,9: quaternion(-.2, .8,0), 16: quaternion(0.7,-.8,0)
     }
-    flying_dinosaur_scale_keys = {0: .0005, 7.5: .002, 8: .002, 8.5: .002, 16: .0005}  
+    flying_dinosaur_scale_keys = {0: .005, 7.5: .02, 8: .02, 8.5: .02, 16: .005}  
     flying_dinosaur_keynode = KeyFrameControlNode2(flying_dinosaur_translate_keys, flying_dinosaur_rotate_keys, flying_dinosaur_scale_keys)
 
     flying_dinosaur_keynode.add(FlyingDinosaur())
@@ -1868,7 +1867,6 @@ def main():
 
 
     viewer.add(CubeTexturedPlane(files))
-    viewer.add(TexturedPlane1('fire.jpeg'))
 
     #viewer.add(*[mesh for file in sys.argv[1:] for mesh in load(file)])
     #viewer.add(*[mesh for file in ["trex.obj"] for mesh in load(file)])
