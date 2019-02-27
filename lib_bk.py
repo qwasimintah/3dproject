@@ -128,9 +128,7 @@ class VertexArray:
             # bind a new vbo, upload its data to GPU, declare its size and type
             self.buffers += [GL.glGenBuffers(1)]
             data = np.array(data, np.float32, copy=False)
-            print(data)
             nb_primitives, size = data.shape
-            print(nb_primitives,size)
             GL.glEnableVertexAttribArray(loc)  # activates for current vao only
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.buffers[-1])
             GL.glBufferData(GL.GL_ARRAY_BUFFER, data, usage)
@@ -263,7 +261,6 @@ class CubeTexture:
             # imports image as a numpy array in exactly right format
                 tex = np.array(Image.open("hw_morning/"+file))
                 #tex = np.array(Image.open("sky/"+file))
-                #print(i)
                 format1 = format[0 if len(tex.shape) == 2 else (tex.shape[2] - 1)]
                 GL.glTexImage2D(GL.GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL.GL_RGBA, tex.shape[1],
                                 tex.shape[0], 0, format1, GL.GL_UNSIGNED_BYTE, tex)
@@ -325,7 +322,6 @@ class TexturedPlane:
         # triangle and face buffers
         vertices = 100 * np.array(((-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)), np.float32)
 
-        #print(vertices)
         #faces = np.array(((0, 1, 2), (0, 2, 3)), np.uint32)
         #self.vertex_array = VertexArray([vertices], faces)
         skybox_right = iter([1, -1, -1, 1, -1,  1, 1,  1,  1, 1,  1,  1, 1,  1, -1, 1, -1, -1])
@@ -337,7 +333,6 @@ class TexturedPlane:
         skybox = iter(SKY_BOX_VERTICES)
         sk_right_triangle = [(x,next(skybox), next(skybox)) for x in skybox]
         #sk_right_triangle = [(x, next(y), next(y)) for y in [skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front] for x in y ]
-        print(sk_right_triangle)
         #skybox_vertices = np.array([skybox_right, skybox_left, skybox_top, skybox_bottom, skybox_back, skybox_front], dtype=np.float32)
         #print(skybox_vertices)
         self.vertex_array = VertexArray([sk_right_triangle])
